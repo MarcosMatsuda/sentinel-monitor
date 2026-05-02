@@ -50,8 +50,9 @@ export class AddCameraUseCase {
       addedAt: this.deps.now(),
     };
 
-    // TODO: PR6 — ConnectToCameraUseCase will open the WebRTC
-    // peer connection here, then this binding becomes "live".
+    // The realtime side (subscribePresence + ConnectToCameraUseCase)
+    // is wired by StartViewerSessionUseCase from the store layer once
+    // the new binding is persisted.
     return CameraBindingEntity.create(props);
   }
 }

@@ -6,6 +6,8 @@ import { AddCameraModal } from '@/presentation/components/add-camera-modal';
 import { CameraTile } from '@/presentation/components/camera-tile.component';
 import { EmptyState } from '@/presentation/components/empty-state';
 import { useBindingsStore } from '@/presentation/stores/bindings.store';
+import { usePeersStore } from '@/presentation/stores/peers.store';
+import { usePresenceStore } from '@/presentation/stores/presence.store';
 import { radii, semantic, spacing, typography } from '@/presentation/theme';
 
 const layoutUC = new ComputeGridLayoutUseCase();
