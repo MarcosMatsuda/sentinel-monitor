@@ -31,4 +31,12 @@ export interface ISignalingRepository {
   offSignal(handler: (signal: SignalDto) => void): void;
   onPresenceChange(handler: (change: PresenceChangeDto) => void): void;
   offPresenceChange(handler: (change: PresenceChangeDto) => void): void;
+
+  /**
+   * Subscribe to socket reconnect events. The handler is invoked AFTER
+   * the underlying transport has re-established a connection and
+   * presence/subscription state needs to be re-emitted by callers.
+   */
+  onReconnect(handler: () => void): void;
+  offReconnect(handler: () => void): void;
 }

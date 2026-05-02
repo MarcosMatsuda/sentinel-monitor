@@ -94,6 +94,8 @@ function createFakeSignaling(): FakeSignaling {
     offPresenceChange: (h) => {
       f.presenceHandlers = f.presenceHandlers.filter((x) => x !== h);
     },
+    onReconnect: () => undefined,
+    offReconnect: () => undefined,
   };
   return f;
 }
