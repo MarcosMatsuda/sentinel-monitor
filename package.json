@@ -1,0 +1,27 @@
+{
+  "name": "sentinel-monitor",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Multi-camera B2B dashboard — WebRTC P2P, Expo Universal viewer, browser camera publisher",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "dev:server": "turbo run dev --filter=@sentinel-monitor/server",
+    "dev:camera": "turbo run dev --filter=@sentinel-monitor/camera",
+    "dev:viewer": "turbo run dev --filter=@sentinel-monitor/viewer",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:unit": "turbo run test:unit",
+    "clean": "turbo run clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "turbo": "^2.4.0"
+  }
+}

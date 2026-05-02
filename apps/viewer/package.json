@@ -1,0 +1,14 @@
+{
+  "name": "@sentinel-monitor/viewer",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'expo install pending — see PR5'",
+    "build": "echo 'use EAS Build for production'",
+    "typecheck": "echo 'tsc pending — see PR5' && exit 0",
+    "lint": "echo 'no lint configured yet'",
+    "test": "echo 'tests pending — see PR5' && exit 0",
+    "test:unit": "echo 'tests pending — see PR5' && exit 0",
+    "clean": "rm -rf dist coverage .expo"
+  }
+}

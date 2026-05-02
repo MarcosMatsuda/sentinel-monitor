@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sentinel Monitor — Software Architecture Document</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fraunces:opsz,wght@9..144,400;9..144,600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0d12;--bg2:#0f141b;--bg3:#141a23;
+  --text:#e8eef5;--text2:#94a3b8;--text3:#64748b;
+  --teal:#2dd4bf;--amber:#fbbf24;--coral:#f87171;--green:#22c55e;
+  --gray-line:#1e2733;
+  --radius:12px;
+  --mono:'JetBrains Mono',monospace;
+}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased}
+
+.layout{display:grid;grid-template-columns:260px 1fr;max-width:1280px;margin:0 auto;min-height:100vh}
+@media(max-width:900px){.layout{grid-template-columns:1fr}}
+
+/* TOC */
+aside.toc{position:sticky;top:0;height:100vh;overflow-y:auto;padding:32px 24px;border-right:1px solid var(--gray-line);background:var(--bg2)}
+@media(max-width:900px){aside.toc{position:static;height:auto;border-right:none;border-bottom:1px solid var(--gray-line)}}
+.toc-brand{font-family:'Fraunces',serif;font-size:18px;font-weight:600;color:var(--text);margin-bottom:6px}
+.toc-brand span{color:var(--teal)}
+.toc-version{font-family:var(--mono);font-size:11px;color:var(--text3);margin-bottom:24px;letter-spacing:.05em;text-transform:uppercase}
+.toc-list{list-style:none;display:flex;flex-direction:column;gap:2px}
+.toc-list a{display:block;padding:6px 10px;color:var(--text2);text-decoration:none;font-size:13px;border-radius:6px;transition:all .15s}
+.toc-list a:hover{color:var(--text);background:var(--bg3)}
+.toc-list a.active{color:var(--teal);background:rgba(45,212,191,.08)}
+.toc-list .sub{padding-left:24px;font-size:12px;color:var(--text3)}
+
+main{padding:48px 56px;max-width:880px}
+@media(max-width:900px){main{padding:32px 24px}}
+
+h1.doc-title{font-family:'Fraunces',serif;font-size:42px;font-weight:600;letter-spacing:-.02em;line-height:1.1;margin-bottom:16px}
+h1.doc-title span{color:var(--teal)}
+.doc-subtitle{color:var(--text2);font-size:16px;margin-bottom:8px}
+.doc-meta{font-family:var(--mono);font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:48px;padding-bottom:24px;border-bottom:1px solid var(--gray-line)}
+
+section{margin-bottom:64px;scroll-margin-top:24px}
+section h2{font-family:'Fraunces',serif;font-size:28px;font-weight:600;letter-spacing:-.01em;margin-bottom:8px;color:var(--text)}
+section h2 .num{color:var(--text3);font-family:var(--mono);font-size:14px;margin-right:12px;font-weight:400}
+section h3{font-size:18px;font-weight:600;margin-top:32px;margin-bottom:12px;color:var(--text)}
+section h4{font-size:14px;font-weight:600;margin-top:20px;margin-bottom:8px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em}
+
+p{color:var(--text2);margin-bottom:14px;font-size:15px}
+p strong{color:var(--text);font-weight:600}
+
+ul,ol{padding-left:24px;margin-bottom:16px;color:var(--text2);font-size:15px}
+ul li,ol li{margin-bottom:6px;line-height:1.6}
+
+code{font-family:var(--mono);font-size:13px;background:var(--bg3);color:var(--teal);padding:1px 6px;border-radius:4px}
+pre{background:var(--bg2);border:1px solid var(--gray-line);border-radius:var(--radius);padding:16px;overflow-x:auto;margin-bottom:20px;font-size:12.5px}
+pre code{background:transparent;color:var(--text);padding:0;font-family:var(--mono);line-height:1.6;display:block;white-space:pre}
+
+table{width:100%;border-collapse:collapse;margin-bottom:20px;font-size:14px}
+table th,table td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--gray-line);vertical-align:top}
+table th{color:var(--text2);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;background:var(--bg2)}
+table td{color:var(--text2)}
+table td code{font-size:12px}
+
+.callout{padding:14px 18px;background:var(--bg2);border-left:3px solid var(--teal);border-radius:6px;margin-bottom:20px;font-size:14px;color:var(--text2)}
+.callout.warn{border-color:var(--amber)}
+.callout.info{border-color:var(--teal)}
+.callout strong{color:var(--text);display:block;margin-bottom:4px;font-size:13px;text-transform:uppercase;letter-spacing:.04em}
+
+.diagram{font-family:var(--mono);font-size:12px;line-height:1.5;color:var(--text);background:var(--bg2);border:1px solid var(--gray-line);border-radius:var(--radius);padding:20px;overflow-x:auto;margin-bottom:20px;white-space:pre}
+
+.tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:10px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em;margin-right:6px}
+.tag-mvp{background:rgba(45,212,191,.1);color:var(--teal);border:1px solid rgba(45,212,191,.3)}
+.tag-v2{background:rgba(251,191,36,.1);color:var(--amber);border:1px solid rgba(251,191,36,.3)}
+.tag-v3{background:rgba(248,113,113,.1);color:var(--coral);border:1px solid rgba(248,113,113,.3)}
+
+footer{text-align:center;padding:32px 24px;color:var(--text3);font-size:12px;border-top:1px solid var(--gray-line);margin-top:64px}
+footer a{color:var(--teal);text-decoration:none}
+
+a.inline{color:var(--teal);text-decoration:none;border-bottom:1px dotted var(--teal-dim)}
+a.inline:hover{border-bottom-style:solid}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<aside class="toc">
+  <div class="toc-brand">Sentinel<span>Monitor</span></div>
+  <div class="toc-version">SDD v0.1 &middot; Maio 2026</div>
+  <nav>
+    <ul class="toc-list">
+      <li><a href="#overview">1. Overview</a></li>
+      <li><a href="#architecture">2. Architecture</a></li>
+      <li><a href="#identity" class="sub">2.1 Identity model</a></li>
+      <li><a href="#topology" class="sub">2.2 Topology</a></li>
+      <li><a href="#stack">3. Tech stack</a></li>
+      <li><a href="#monorepo">4. Monorepo layout</a></li>
+      <li><a href="#protocol">5. Signaling protocol</a></li>
+      <li><a href="#datachannel" class="sub">5.1 DataChannel messages</a></li>
+      <li><a href="#flows">6. Sequence flows</a></li>
+      <li><a href="#pairing-flow" class="sub">6.1 Pairing</a></li>
+      <li><a href="#reconnect-flow" class="sub">6.2 Reconnect</a></li>
+      <li><a href="#design">7. Design system</a></li>
+      <li><a href="#testing">8. Test strategy</a></li>
+      <li><a href="#nfr">9. Non-functional reqs</a></li>
+      <li><a href="#deploy">10. Deployment</a></li>
+      <li><a href="#risks">11. Risks &amp; mitigations</a></li>
+      <li><a href="#future">12. Future phases (AI)</a></li>
+      <li><a href="#workflow">13. Dev workflow</a></li>
+    </ul>
+  </nav>
+</aside>
+
+<main>
+
+<h1 class="doc-title">Sentinel<span>Monitor</span></h1>
+<p class="doc-subtitle">Software Architecture Document</p>
+<p class="doc-meta">v0.1 &middot; Maio 2026 &middot; Marcos Matsuda &middot; <a href="roadmap.html" class="inline">roadmap &rarr;</a></p>
+
+<!-- 1. OVERVIEW -->
+<section id="overview">
+<h2><span class="num">01</span>Overview</h2>
+
+<h3>Vis&atilde;o do produto</h3>
+<p>SentinelMonitor &eacute; um <strong>dashboard B2B de m&uacute;ltiplas c&acirc;meras</strong> com pareamento permanente. Caso de uso: empresa de seguran&ccedil;a instala c&acirc;meras na casa do cliente. T&eacute;cnico abre URL no dispositivo da c&acirc;mera (laptop / celular / no futuro IP cam), mostra c&oacute;digo de 6 caracteres. Operador no QG digita o c&oacute;digo no dashboard. C&acirc;mera fica permanentemente paireada &mdash; fechar/reabrir o dashboard reconecta automaticamente, sem novo pareamento.</p>
+
+<h3>Objetivos</h3>
+<ul>
+  <li><strong>Pareamento permanente</strong> &mdash; um c&oacute;digo, uma vez. Nunca mais.</li>
+  <li><strong>P2P privacy-first</strong> &mdash; v&iacute;deo + &aacute;udio fluem direto entre c&acirc;mera e dashboard via WebRTC. Server s&oacute; faz signaling.</li>
+  <li><strong>Universal viewer</strong> &mdash; uma codebase Expo, roda em iOS / Android / Web.</li>
+  <li><strong>Grid escal&aacute;vel</strong> &mdash; at&eacute; 9 c&acirc;meras simult&acirc;neas em layout autom&aacute;tico 1x1 / 2x2 / 3x3. Tap em tile = fullscreen.</li>
+  <li><strong>Stateless server</strong> &mdash; sem DB no MVP. Clientes guardam bindings; server s&oacute; gerencia presence + pairing codes ef&ecirc;meros.</li>
+  <li><strong>Phase 2 ready</strong> &mdash; arquitetura desenhada para AI cross-camera tracking sem refactor estrutural.</li>
+</ul>
+
+<h3>Constraints</h3>
+<ul>
+  <li>MVP testa em casa via browsers em laptops. Phase 2+ aceita c&acirc;mera de celular ou IP cam (RTSP bridge).</li>
+  <li>M&aacute;ximo 9 c&acirc;meras por dashboard (limite de UI/CPU, n&atilde;o de protocol).</li>
+  <li>Sem auth no MVP &mdash; pairing code + UUID local servem como autentica&ccedil;&atilde;o de fato.</li>
+  <li>Server fica em free tier (Render / Fly.io); TURN opcional (Metered.ca free tier).</li>
+</ul>
+</section>
+
+<!-- 2. ARCHITECTURE -->
+<section id="architecture">
+<h2><span class="num">02</span>Architecture</h2>
+
+<h3>Diagrama de componentes</h3>
+<pre class="diagram">  Camera device (browser)              Server (signaling + presence)        Viewer (Expo Universal)
+  &#9484;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9488;               &#9484;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9488;           &#9484;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9488;
+  &#9474; getUserMedia       &#9474;               &#9474; presence map           &#9474;           &#9474; AsyncStorage:       &#9474;
+  &#9474; UUID stable        &#9474;&#9668;&#9472;&#9472; WebRTC P2P (after handshake) &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9658;&#9474;           &#9474;   bindings[]       &#9474;
+  &#9474; pairing code       &#9474;               &#9474; pairing codes (TTL 5m) &#9474;           &#9474;   dashboardId      &#9474;
+  &#9474; persists pairings  &#9474;   signaling   &#9474; signal routing by UUID &#9474; signaling &#9474; Grid 1x1/2x2/3x3   &#9474;
+  &#9492;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9516;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9496;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9658;&#9474;                        &#9474;&#9668;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9508; Tap &#8594; fullscreen   &#9474;
+            &#9474;                          &#9492;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9496;           &#9474; Rename / Remove    &#9474;
+            &#9474;                                                              &#9474; Mute per tile      &#9474;
+            &#9492;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472; direct video + audio (WebRTC P2P) &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9658;&#9474; Online/offline dot &#9474;
+                                                                            &#9492;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9496;</pre>
+
+<h3 id="identity">2.1 Identity model</h3>
+<table>
+  <thead><tr><th>Concern</th><th>Decision</th></tr></thead>
+  <tbody>
+    <tr><td>Camera identity</td><td>UUID v4 do <code>crypto.randomUUID()</code>, persistido em <code>localStorage["sm.cameraId"]</code></td></tr>
+    <tr><td>Dashboard identity</td><td>UUID v4 em <code>localStorage</code> (web) / <code>AsyncStorage</code> (native), chave <code>sm.dashboardId</code></td></tr>
+    <tr><td>Pairing code</td><td>6 chars, alfabeto <code>ABCDEFGHJKMNPQRSTUVWXYZ23456789</code> (32 chars, sem 0/I/L/O), TTL 5 min, single-use</td></tr>
+    <tr><td>Persistent binding</td><td>Client-side: dashboard guarda <code>[{cameraId, label, addedAt}]</code>; camera guarda <code>pairedDashboards: string[]</code></td></tr>
+    <tr><td>Server state</td><td>In-memory: presence map (<code>peerId &rarr; socketId</code>) + pairing codes ativos. Sem DB no MVP. Stateless em bindings &mdash; clientes s&atilde;o source of truth.</td></tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <strong>Trade-off conhecido</strong>
+  Se a c&acirc;mera limpar o <code>localStorage</code> (desinstalar app, modo an&ocirc;nimo, browser reset), o pareamento quebra. C&acirc;mera vira "novo dispositivo". Para MVP/portfolio aceita-se. Phase 3 (multi-tenant) adiciona DB + tokens assinados.
+</div>
+
+<h3 id="topology">2.2 Topology</h3>
+<p>Mesh: <strong>1 dashboard &harr; N c&acirc;meras = N peer connections independentes</strong>. Cada c&acirc;mera pode estar paireada a M dashboards (M pequeno na pr&aacute;tica &mdash; 1 ou 2 operadores por instala&ccedil;&atilde;o). Cada peer connection compartilha o mesmo <code>MediaStream</code> da c&acirc;mera, ent&atilde;o adicionar um segundo dashboard custa s&oacute; mais um SDP handshake, n&atilde;o mais uma captura.</p>
+
+<p>Quando o n&uacute;mero de viewers/c&acirc;meras crescer al&eacute;m do que mesh aguenta (Phase 3), migra para <strong>SFU central</strong> (mediasoup) que recebe stream uma vez por c&acirc;mera e fanout para os viewers.</p>
+</section>
+
+<!-- 3. STACK -->
+<section id="stack">
+<h2><span class="num">03</span>Tech stack</h2>
+<table>
+  <thead><tr><th>Layer</th><th>Technology</th><th>Justification</th></tr></thead>
+  <tbody>
+    <tr><td>Server</td><td>Node.js 20+, Express, Socket.IO 4</td><td>Mesma stack do baby-monitor; bidirectional events + reconnection nativos</td></tr>
+    <tr><td>Camera (publisher)</td><td>Vite, vanilla TypeScript, WebRTC nativo do browser</td><td>Sem framework: zero deps, leve, abre em qualquer browser de celular ou laptop</td></tr>
+    <tr><td>Viewer (web)</td><td>Expo SDK 52+ via react-native-web</td><td>Universal: mesma codebase de iOS/Android serve para web</td></tr>
+    <tr><td>Viewer (native)</td><td>Expo Dev Client + react-native-webrtc 124+</td><td>react-native-webrtc &eacute; o padr&atilde;o; requer custom dev client (n&atilde;o Expo Go)</td></tr>
+    <tr><td>Routing (viewer)</td><td>Expo Router</td><td>File-based, j&aacute; integrado ao Expo SDK</td></tr>
+    <tr><td>State (viewer)</td><td>Zustand</td><td>Leve, sem boilerplate, hook-friendly, testable</td></tr>
+    <tr><td>Storage</td><td>localStorage (web) / @react-native-async-storage (native)</td><td>Platform-split via .web.ts / .native.ts</td></tr>
+    <tr><td>Monorepo</td><td>Turborepo + pnpm workspaces</td><td>Cache-friendly, parallel tasks, shared packages</td></tr>
+    <tr><td>STUN</td><td>Google STUN p&uacute;blico</td><td>Free, n&atilde;o requer conta</td></tr>
+    <tr><td>TURN</td><td>Metered.ca free tier (500MB/m&ecirc;s)</td><td>Para NATs sim&eacute;tricos; opcional no MVP</td></tr>
+    <tr><td>Hosting (server)</td><td>Render free tier</td><td>Auto-deploy do GitHub, suporte WebSocket</td></tr>
+    <tr><td>Hosting (camera web)</td><td>Vercel / Netlify static</td><td>CDN global, deploy instant&acirc;neo</td></tr>
+  </tbody>
+</table>
+</section>
+
+<!-- 4. MONOREPO -->
+<section id="monorepo">
+<h2><span class="num">04</span>Monorepo layout</h2>
+<pre><code>sentinel-monitor/
+&#9500;&#9472;&#9472; apps/
+&#9474;   &#9500;&#9472;&#9472; server/        # Node.js + Express + Socket.IO; signaling + presence
+&#9474;   &#9500;&#9472;&#9472; camera/        # Vite + vanilla TS; browser camera publisher
+&#9474;   &#9492;&#9472;&#9472; viewer/        # Expo Universal (iOS / Android / Web)
+&#9500;&#9472;&#9472; packages/
+&#9474;   &#9500;&#9472;&#9472; shared-types/  # Domain types, Socket.IO contract, DataChannel
+&#9474;   &#9500;&#9472;&#9472; webrtc-config/ # ICE servers, media constraints, bitrate presets
+&#9474;   &#9492;&#9472;&#9472; design-tokens/ # Colors, spacing, typography
+&#9500;&#9472;&#9472; .github/workflows/ci.yml
+&#9500;&#9472;&#9472; architecture.html (this file)
+&#9500;&#9472;&#9472; roadmap.html
+&#9500;&#9472;&#9472; pnpm-workspace.yaml
+&#9500;&#9472;&#9472; turbo.json
+&#9500;&#9472;&#9472; tsconfig.base.json
+&#9500;&#9472;&#9472; .env.example
+&#9500;&#9472;&#9472; start                 # iTerm2 tabs: server + camera + viewer
+&#9492;&#9472;&#9472; README.md</code></pre>
+
+<p>Cada app segue Clean Architecture (Uncle Bob / Hexagonal):</p>
+<pre><code>apps/&lt;app&gt;/src/
+&#9500;&#9472;&#9472; domain/           # Pure business logic. Zero framework deps.
+&#9474;   &#9500;&#9472;&#9472; entities/
+&#9474;   &#9500;&#9472;&#9472; repositories/    # Interface contracts (DI)
+&#9474;   &#9492;&#9472;&#9472; use-cases/
+&#9500;&#9472;&#9472; data/             # (server) Repository implementations
+&#9500;&#9472;&#9472; infrastructure/   # Concrete adapters (WebRTC, signaling, storage)
+&#9492;&#9472;&#9472; presentation/     # UI layer (components, screens, stores)</code></pre>
+
+<p><strong>Layer rules</strong>: <code>domain</code> n&atilde;o importa nada das outras. <code>data</code>/<code>infrastructure</code> implementam interfaces de <code>domain</code>. <code>presentation</code> consome use cases via DI no composition root (<code>main.ts</code> ou <code>_layout.tsx</code>).</p>
+</section>
+
+<!-- 5. PROTOCOL -->
+<section id="protocol">
+<h2><span class="num">05</span>Signaling protocol</h2>
+
+<h3>Socket.IO event contract</h3>
+<table>
+  <thead><tr><th>Event</th><th>Direction</th><th>Payload</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td><code>register-presence</code></td><td>client &rarr; server</td><td><code>{peerId, role}</code></td><td>Camera ou dashboard se anuncia ao conectar</td></tr>
+    <tr><td><code>request-pairing-code</code></td><td>camera &rarr; server (ack)</td><td><code>{cameraId}</code></td><td>Camera pede c&oacute;digo de pareamento; ack devolve <code>{code, expiresAt}</code></td></tr>
+    <tr><td><code>redeem-pairing-code</code></td><td>dashboard &rarr; server (ack)</td><td><code>{code, dashboardId}</code></td><td>Operador digita c&oacute;digo; server resolve para cameraId atomicamente</td></tr>
+    <tr><td><code>pairing-redeemed</code></td><td>server &rarr; camera</td><td><code>{cameraId, dashboardId}</code></td><td>Push para a c&acirc;mera saber quem &eacute; o novo dashboard parente</td></tr>
+    <tr><td><code>query-presence</code></td><td>dashboard &rarr; server (ack)</td><td><code>{peerIds[]}</code></td><td>Dashboard pergunta quais das suas c&acirc;meras est&atilde;o online</td></tr>
+    <tr><td><code>subscribe-presence</code></td><td>dashboard &rarr; server</td><td><code>{peerIds[]}</code></td><td>Dashboard quer ser notificado de mudan&ccedil;as nesse conjunto</td></tr>
+    <tr><td><code>presence-change</code></td><td>server &rarr; dashboard</td><td><code>{peerId, online}</code></td><td>Push quando c&acirc;mera subscrita conecta/desconecta</td></tr>
+    <tr><td><code>signal</code></td><td>peer &rarr; server &rarr; peer</td><td><code>{fromPeerId, toPeerId, payload}</code></td><td>Relay de SDP offer/answer + ICE candidates entre peers identificados por UUID</td></tr>
+  </tbody>
+</table>
+
+<div class="callout info">
+  <strong>Por que sem rooms</strong>
+  No baby-monitor a sala identifica o par. Aqui peers t&ecirc;m UUIDs est&aacute;veis, ent&atilde;o identificamos diretamente. Server faz lookup <code>toPeerId &rarr; socketId</code> no presence map e relaya. Se o peer estiver offline, o signal &eacute; descartado silenciosamente.
+</div>
+
+<h3 id="datachannel">5.1 DataChannel messages</h3>
+<p>Cada peer connection abre um DataChannel rotulado <code>control</code>. Mensagens trafegam diretamente entre os dois peers (n&atilde;o passam pelo server). Tipo discriminado:</p>
+<pre><code>type DataChannelMessage =
+  | { type: 'video-meta'; width: number; height: number; ts: number }
+  | { type: 'audio-mute-request'; muted: boolean; ts: number }   // dashboard &rarr; camera, advisory
+  | { type: 'ping'; ts: number }
+  | { type: 'pong'; ts: number }
+  // Phase 2 forward-compat:
+  | { type: 'detection-event'; entityType: 'person' | 'vehicle'; bbox: BoundingBox; ts: number };</code></pre>
+</section>
+
+<!-- 6. FLOWS -->
+<section id="flows">
+<h2><span class="num">06</span>Sequence flows</h2>
+
+<h3 id="pairing-flow">6.1 Pairing (1&ordf; vez)</h3>
+<pre class="diagram">Camera                              Server                          Dashboard
+  load cameraId from localStorage     |                                |
+  connect socket                      |                                |
+  emit register-presence(camera, U)&#9472;&#9472;&#9658;|                                |
+                                      | presence[U] = socketA          |
+  emit request-pairing-code(U)&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9658;|                                |
+                                      | code=ABC123, ttl 5min          |
+  &#9472;&#9472;&#9472;ack {ABC123, exp}&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;|                                |
+  show code on screen                 |                                |
+                                                                      operator types ABC123
+                                      |&#9472;&#9472;redeem-pairing-code(ABC123,D)|
+                                      | atomic redeem &rarr; cameraId=U  |
+                                      |&#9472;&#9472;&#9472;ack {cameraId:U, dashId:D}&#9472;&#9472;&#9658;|
+  &#9472;&#9472;&#9472;push pairing-redeemed{D}&#9472;&#9472;&#9472;&#9472;|                                |
+  save D in pairedDashboards          |                                | persist binding {U, label}
+                                                                      subscribe-presence([U])
+                                                                      emit signal: offer to U
+                                      | route via presence map         |
+  &#9472;&#9472;&#9472;signal: offer (from D)&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;|                                |
+  setRemoteDescription, answer, ICE   | route ICE/answer to D         |
+                                                                      onTrack &rarr; peers.store[U]
+                                                                      &lt;CameraTile /&gt; renders</pre>
+
+<h3 id="reconnect-flow">6.2 Reconnect (toda vez que dashboard reabre)</h3>
+<pre class="diagram">Dashboard                              Server
+  AsyncStorage &rarr; bindings=[U1,U2,U3]    |
+  localStorage &rarr; dashboardId=D          |
+  connect socket                        |
+  emit register-presence(dashboard, D)&#9472;&#9472;&#9658;|
+  emit query-presence([U1,U2,U3])&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9658;|
+                                        | check presence map
+  &#9472;&#9472;&#9472;ack {online:[U1, U3]}&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;|
+  emit subscribe-presence([U1,U2,U3])&#9472;&#9472;&#9658;|
+  for each online peer: ConnectToCameraUseCase()
+                                        | route signals as before
+  later, U2 reconnects:
+                                        |&#9472;&#9472; register-presence(camera, U2) from socketB
+  &#9472;&#9472;&#9472;presence-change{U2, online:true}&#9472;&#9472;&#9472;|
+  ConnectToCameraUseCase(U2)</pre>
+</section>
+
+<!-- 7. DESIGN -->
+<section id="design">
+<h2><span class="num">07</span>Design system</h2>
+
+<h3>Direction</h3>
+<p><strong>Command Center + Bento Grid</strong> (placeholder, lock-in formal em PR0 via skill <code>ui-ux-pro-max</code>):</p>
+<ul>
+  <li><strong>Command Center</strong> &mdash; superficies escuras, mono em identifiers (c&oacute;digos, UUIDs, timestamps), motion contido, status colors com significado sem&acirc;ntico</li>
+  <li><strong>Bento Grid</strong> &mdash; tiles arredondados com glow fino no focus, soft shadows em estados elevados (modal, fullscreen)</li>
+</ul>
+
+<h3>Token system</h3>
+<p>Definido em <code>packages/design-tokens</code>:</p>
+<table>
+  <thead><tr><th>Categoria</th><th>Tokens</th></tr></thead>
+  <tbody>
+    <tr><td><code>colors</code></td><td>gray (50-950), teal, amber, red, green</td></tr>
+    <tr><td><code>semantic.bg</code></td><td>primary, secondary, surface, elevated</td></tr>
+    <tr><td><code>semantic.text</code></td><td>primary, secondary, muted, inverse</td></tr>
+    <tr><td><code>semantic.status</code></td><td>online (green), connecting (amber), offline (red), alert (red), idle (gray)</td></tr>
+    <tr><td><code>semantic.accent</code></td><td>primary (teal), primaryDim</td></tr>
+    <tr><td><code>spacing</code></td><td>0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24 (px)</td></tr>
+    <tr><td><code>typography.family</code></td><td>sans (Inter), mono (JetBrains Mono)</td></tr>
+    <tr><td><code>typography.size</code></td><td>xs, sm, base, md, lg, xl, 2xl, 3xl, 4xl, display</td></tr>
+    <tr><td><code>radii</code></td><td>sm, md, lg, xl, 2xl, full</td></tr>
+  </tbody>
+</table>
+
+<h3>Skills aplicadas em cada PR</h3>
+<table>
+  <thead><tr><th>Skill</th><th>Quando dispara</th></tr></thead>
+  <tbody>
+    <tr><td><code>ui-ux-pro-max</code></td><td>PR0 (lock-in) e em design de novos componentes</td></tr>
+    <tr><td><code>baseline-ui</code></td><td>Todo PR de UI &mdash; enforce de tokens, anti-slop</td></tr>
+    <tr><td><code>fixing-accessibility</code></td><td>Todo PR com componente interativo &mdash; WCAG AA</td></tr>
+    <tr><td><code>fixing-motion-performance</code></td><td>Anima&ccedil;&otilde;es de grid, fullscreen, presence pulse</td></tr>
+  </tbody>
+</table>
+</section>
+
+<!-- 8. TESTING -->
+<section id="testing">
+<h2><span class="num">08</span>Test strategy</h2>
+
+<h3>Stack por app</h3>
+<table>
+  <thead><tr><th>App</th><th>Framework</th><th>Coverage target</th></tr></thead>
+  <tbody>
+    <tr><td>server</td><td>Jest + ts-jest + supertest</td><td>90% domain + use cases, 80% socket handler integration</td></tr>
+    <tr><td>camera</td><td>Vitest + happy-dom + fake-rtc helper</td><td>80% domain + use cases + signaling client</td></tr>
+    <tr><td>viewer</td><td>Jest + ts-jest (lib code only, n&atilde;o componentes RN no MVP)</td><td>80% domain + use cases + stores</td></tr>
+  </tbody>
+</table>
+
+<h3>Regras</h3>
+<ul>
+  <li>Cada acceptance criterion da issue do GitHub mapeia para 1+ teste</li>
+  <li>Mock todos os ports/repos externos. Nunca mocka a coisa que est&aacute; sendo testada.</li>
+  <li><code>clearAllMocks</code> em <code>beforeEach</code></li>
+  <li>Sem testes que dependem de execution order</li>
+  <li>Testes que sintetizam ou consomem v&iacute;deo usam fakes (<code>fake-rtc.ts</code>, <code>fake-audio-context.ts</code>) reaproveitados do baby-monitor</li>
+  <li>Skip component tests no MVP &mdash; entram em fase posterior se valer</li>
+</ul>
+</section>
+
+<!-- 9. NFR -->
+<section id="nfr">
+<h2><span class="num">09</span>Non-functional requirements</h2>
+<table>
+  <thead><tr><th>Categoria</th><th>Requisito</th><th>Target</th></tr></thead>
+  <tbody>
+    <tr><td>Latency</td><td>Audio + video end-to-end (mesma rede)</td><td>&lt; 250ms</td></tr>
+    <tr><td>Latency</td><td>Pairing handshake</td><td>&lt; 2s</td></tr>
+    <tr><td>Reliability</td><td>Auto-reconnect ap&oacute;s server restart</td><td>&lt; 10s</td></tr>
+    <tr><td>Reliability</td><td>Auto-reconnect ap&oacute;s WiFi blip</td><td>&lt; 5s</td></tr>
+    <tr><td>Capacity</td><td>C&acirc;meras simult&acirc;neas por dashboard</td><td>9 (UI), 16 (protocol limit)</td></tr>
+    <tr><td>Security</td><td>Signaling transport</td><td>WSS (TLS) em produ&ccedil;&atilde;o</td></tr>
+    <tr><td>Security</td><td>Media transport</td><td>DTLS-SRTP (default WebRTC)</td></tr>
+    <tr><td>Security</td><td>Pairing code entropy</td><td>32^6 = 1.07 bilh&otilde;es de combina&ccedil;&otilde;es</td></tr>
+    <tr><td>Privacy</td><td>Audio/video routing</td><td>P2P only, sem relay no server</td></tr>
+    <tr><td>Privacy</td><td>Server data retention</td><td>Zero &mdash; presence efemera, codes expiram em 5min</td></tr>
+    <tr><td>Compatibility</td><td>Camera browser</td><td>Chrome 90+, Safari 14+, Firefox 90+, Edge 90+</td></tr>
+    <tr><td>Compatibility</td><td>Viewer native</td><td>iOS 15+, Android 10+</td></tr>
+    <tr><td>UX</td><td>Time to first frame ap&oacute;s pairing</td><td>&lt; 3s</td></tr>
+  </tbody>
+</table>
+</section>
+
+<!-- 10. DEPLOY -->
+<section id="deploy">
+<h2><span class="num">10</span>Deployment</h2>
+<table>
+  <thead><tr><th>Component</th><th>Where</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>Server</td><td>Render free tier (auto-deploy do GitHub branch <code>main</code>)</td><td>WebSocket support, free, deploy autom&aacute;tico</td></tr>
+    <tr><td>Camera (web)</td><td>Vercel static (auto-deploy do GitHub)</td><td>CDN global, instant&acirc;neo, dom&iacute;nio custom</td></tr>
+    <tr><td>Viewer (web)</td><td>Vercel static</td><td>Mesma raz&atilde;o</td></tr>
+    <tr><td>Viewer (iOS)</td><td>EAS Build &rarr; TestFlight (n&atilde;o p&uacute;blico no MVP)</td><td>Build na cloud, instala via TestFlight</td></tr>
+    <tr><td>Viewer (Android)</td><td>EAS Build &rarr; APK download direto</td><td>Sem fric&ccedil;&atilde;o de Play Store no MVP</td></tr>
+  </tbody>
+</table>
+
+<p>Env vars necess&aacute;rias em produ&ccedil;&atilde;o:</p>
+<pre><code>PORT=3010
+CORS_ORIGIN=https://camera.sentinel.app,https://viewer.sentinel.app
+SIGNALING_URL=https://signaling.sentinel.app
+TURN_URL=turn:relay.metered.ca:443?transport=tcp
+TURN_USER=...
+TURN_PASS=...</code></pre>
+</section>
+
+<!-- 11. RISKS -->
+<section id="risks">
+<h2><span class="num">11</span>Risks &amp; mitigations</h2>
+<table>
+  <thead><tr><th>Risk</th><th>Impact</th><th>Probability</th><th>Mitigation</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>react-native-webrtc + Expo Universal</td>
+      <td>High</td>
+      <td>Medium</td>
+      <td>Custom dev client (n&atilde;o Expo Go). Pin <code>react-native-webrtc@124.x</code>. Web build &eacute; o inner-loop dev path; native validado por PR.</td>
+    </tr>
+    <tr>
+      <td>Platform.select footguns</td>
+      <td>Medium</td>
+      <td>Medium</td>
+      <td>File-extension resolution (<code>.web.ts</code>/<code>.native.ts</code>) ao inv&eacute;s de <code>Platform.OS</code> em runtime. CI assert garantindo que <code>react-native-webrtc</code> n&atilde;o entra no bundle web.</td>
+    </tr>
+    <tr>
+      <td>Mesh 1x9 CPU/banda em mobile</td>
+      <td>Medium</td>
+      <td>High</td>
+      <td>Cap default 320x240@15fps via <code>webrtc-config</code>. Auto-aplicar preset "low" quando grid &ge; 5. Pausar peers n&atilde;o-vis&iacute;veis em fullscreen. SFU em Phase 3.</td>
+    </tr>
+    <tr>
+      <td>Race em pairing redemption</td>
+      <td>Low</td>
+      <td>Low</td>
+      <td>Atomic delete-and-return no in-memory repo. Single-use codes by design. Retorna <code>PairingErrorDto</code> tipado em miss.</td>
+    </tr>
+    <tr>
+      <td>Presence drift ap&oacute;s server restart</td>
+      <td>Medium</td>
+      <td>Medium</td>
+      <td>Clientes re-registram em todo socket reconnect. Dashboards re-query presence. Signal route descarta silenciosamente em recipient offline. SLA: reconverge em 1 ciclo.</td>
+    </tr>
+    <tr>
+      <td>localStorage reset quebra binding</td>
+      <td>High</td>
+      <td>Low</td>
+      <td>Documentado como limita&ccedil;&atilde;o conhecida. Phase 3 (multi-tenant) adiciona DB + tokens assinados que sobrevivem ao reset local.</td>
+    </tr>
+  </tbody>
+</table>
+</section>
+
+<!-- 12. FUTURE -->
+<section id="future">
+<h2><span class="num">12</span>Future phases (informs MVP today)</h2>
+
+<h3 class="tag tag-v2">v2 - AI cross-camera tracking</h3>
+<p>Operador marca pessoa/ve&iacute;culo como suspeito em Cam 1; quando a mesma entidade aparece em qualquer outra c&acirc;mera, dashboard alerta. Computer-vision territory: object detection + person/vehicle re-identification + ALPR.</p>
+
+<table>
+  <thead><tr><th>Capacidade Phase 2</th><th>Hook arquitetural no MVP</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Object detection per-camera (YOLO / RT-DETR ou cloud Vision API)</td>
+      <td>Camera publisher exp&otilde;e <code>i-frame-analyzer.repository.ts</code> &mdash; MVP ship <code>NoOpFrameAnalyzer</code>; v2 troca por inference real</td>
+    </tr>
+    <tr>
+      <td>Watchlist de embeddings cross-camera</td>
+      <td>Server ganha canal <code>watchlist.broadcast</code>. MVP s&oacute; deixa o canal existir como no-op</td>
+    </tr>
+    <tr>
+      <td>Detection events (camera &rarr; dashboard)</td>
+      <td>Reuso do DataChannel: <code>{type: 'detection-event', bbox, ts}</code> j&aacute; est&aacute; no union type do MVP</td>
+    </tr>
+    <tr>
+      <td>Cross-camera correlation (ReID, plate match)</td>
+      <td>Server ganha use case <code>CorrelateDetectionsUseCase</code>. MVP s&oacute; precisa do event bus existir</td>
+    </tr>
+    <tr>
+      <td>Alert fanout para dashboard</td>
+      <td>Reuso do presence/subscription: server emite <code>cross-camera-alert</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Tech direction (decidido em v2): provavelmente <strong>on-device inference para object detection</strong> (TensorFlow.js / WebGPU no browser da c&acirc;mera, ou react-native-fast-tflite em mobile cameras), <strong>cloud inference para ReID</strong> (Anthropic API com vision, ou hosted embedding model). Bounding boxes fluem para dashboard como overlay; embeddings fluem para server para cross-camera match.</p>
+
+<h3 class="tag tag-v3">v3 - Scale &amp; produto</h3>
+<ul>
+  <li>Multi-tenant + auth (Clerk/Supabase)</li>
+  <li>Recording cont&iacute;nua / triggered &rarr; Cloudflare R2</li>
+  <li>SFU central (mediasoup) quando mesh n&atilde;o aguentar</li>
+  <li>Motion zones configur&aacute;veis</li>
+  <li>RTSP bridge para IP cameras tradicionais (go2rtc / Janus)</li>
+  <li>Analytics + relat&oacute;rios</li>
+</ul>
+</section>
+
+<!-- 13. WORKFLOW -->
+<section id="workflow">
+<h2><span class="num">13</span>Dev workflow</h2>
+
+<h3>Branching</h3>
+<ul>
+  <li><code>main</code> &mdash; locked. S&oacute; recebe o release v1.0.0 quando o produto estiver feature-complete.</li>
+  <li><code>develop</code> &mdash; default integration branch. Todo PR de feature aponta para develop.</li>
+  <li><code>feat/issue-NN-*</code>, <code>fix/issue-NN-*</code>, <code>chore/issue-NN-*</code>, <code>test/issue-NN-*</code> &mdash; uma branch por issue.</li>
+</ul>
+
+<h3>Branch protection</h3>
+<ul>
+  <li><code>main</code>: PR + 1 human approval + CI verde + linear history</li>
+  <li><code>develop</code>: CI verde (audit + lint + typecheck + tests) + <code>code-reviewer</code> agent verdict not-failing</li>
+</ul>
+
+<h3>Issue-driven autonomous loop</h3>
+<p>Cada PR nasce de uma GitHub issue com acceptance criteria objetivos. Loop por issue:</p>
+<ol>
+  <li><code>gh issue view</code> &rarr; ler crit&eacute;rios</li>
+  <li><code>gh issue edit --add-label "status:in-progress"</code></li>
+  <li>Branch from develop, implement (Clean Arch + SOLID)</li>
+  <li>Escrever tests &mdash; um por acceptance criterion</li>
+  <li>Local: <code>pnpm typecheck &amp;&amp; pnpm test:unit</code></li>
+  <li>Commit conventional + <code>Closes #NN</code></li>
+  <li>Push, <code>gh pr create --base develop</code></li>
+  <li>Dispatch <code>code-reviewer</code> agent</li>
+  <li>Se [CRITICAL]/[MAJOR]: corrigir (max 2 retries) ou escalar</li>
+  <li>CI verde &rarr; <code>gh pr merge --squash --delete-branch</code></li>
+  <li><code>gh issue close NN</code> &rarr; pr&oacute;xima issue</li>
+</ol>
+
+<h3>Release v1.0.0</h3>
+<p>Quando produto estiver feature-complete e validado em devices reais (iPad + browsers + native viewer + camera publisher em redes diferentes com TURN), abrir PR <code>develop &rarr; main</code> intitulado <code>release: v1.0.0</code> com changelog gerado dos commits. Aprova&ccedil;&atilde;o humana obrigat&oacute;ria.</p>
+</section>
+
+</main>
+</div>
+
+<footer>SentinelMonitor &middot; Software Architecture Document v0.1 &middot; Marcos Matsuda &middot; 2026 &middot; <a href="roadmap.html">roadmap &rarr;</a></footer>
+
+<script>
+// Highlight active TOC link based on scroll
+const sections = document.querySelectorAll('section[id]');
+const links = document.querySelectorAll('.toc-list a');
+const linkMap = new Map();
+links.forEach(l => linkMap.set(l.getAttribute('href').slice(1), l));
+
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      links.forEach(l => l.classList.remove('active'));
+      const link = linkMap.get(entry.target.id);
+      if (link) link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px' });
+
+sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
