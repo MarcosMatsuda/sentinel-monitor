@@ -17,7 +17,7 @@
     "clean": "rm -rf dist coverage .expo"
   },
   "dependencies": {
-    "@expo/metro-runtime": "^55.0.10",
+    "@expo/metro-runtime": "^4.0.1",
     "@react-native-async-storage/async-storage": "1.23.1",
     "@sentinel-monitor/design-tokens": "workspace:*",
     "@sentinel-monitor/shared-types": "workspace:*",
