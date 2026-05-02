@@ -1,0 +1,106 @@
+#!/bin/bash
+# ═══════════════════════════════════════════════════════════
+# Sentinel Monitor — one-command dev launch
+# Server (3010) + Camera (5180) + Viewer (5181 web / 8081 Metro)
+# Each service opens in its own iTerm2 tab
+# ═══════════════════════════════════════════════════════════
+
+PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+echo ""
+echo "Sentinel Monitor — Starting…"
+echo ""
+
+# ─── Detect local IP ─────────────────────────────────────────
+LOCAL_IP=$(ipconfig getifaddr en0 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}')
+if [ -z "$LOCAL_IP" ]; then
+  LOCAL_IP="localhost"
+  echo "   ⚠ Could not detect local IP — using localhost"
+  echo "   Camera / viewer won't connect from another device on the LAN"
+else
+  echo "   Local IP: $LOCAL_IP"
+fi
+
+# ─── Kill existing processes on used ports ──────────────────
+for port in 3010 5180 5181 8081; do
+  pids=$(lsof -ti:$port 2>/dev/null)
+  if [ -n "$pids" ]; then
+    echo "$pids" | xargs kill -9 2>/dev/null
+    echo "   Killed process(es) on port $port"
+  fi
+done
+
+sleep 2
+
+for port in 3010 5180 5181 8081; do
+  pids=$(lsof -ti:$port 2>/dev/null)
+  if [ -n "$pids" ]; then
+    echo "$pids" | xargs kill -9 2>/dev/null
+    sleep 1
+  fi
+done
+
+# ─── Check pnpm ──────────────────────────────────────────────
+if ! which pnpm > /dev/null 2>&1; then
+  echo "   pnpm not found — run: npm install -g pnpm"
+  exit 1
+fi
+
+# ─── Check .env ──────────────────────────────────────────────
+if [ ! -f "$PROJECT_DIR/.env" ]; then
+  echo "   .env missing — copying from .env.example"
+  cp "$PROJECT_DIR/.env.example" "$PROJECT_DIR/.env"
+fi
+
+# ─── Install dependencies ────────────────────────────────────
+if [ ! -d "$PROJECT_DIR/node_modules" ]; then
+  echo ""
+  echo "   Installing dependencies…"
+  cd "$PROJECT_DIR" && pnpm install
+fi
+
+# ─── Export env vars consumed by all services ───────────────
+export SIGNALING_URL="http://${LOCAL_IP}:3010"
+export CAMERA_URL="http://${LOCAL_IP}:5180"
+export VIEWER_URL="http://${LOCAL_IP}:5181"
+
+echo ""
+echo "   ┌──────────────────────────────────────────────────┐"
+echo "   │  Server:  http://${LOCAL_IP}:3010                  "
+echo "   │  Camera:  http://${LOCAL_IP}:5180                  "
+echo "   │  Viewer:  http://${LOCAL_IP}:5181  (web)           "
+echo "   │  Viewer:  Metro on 8081           (native)         "
+echo "   └──────────────────────────────────────────────────┘"
+echo ""
+echo "   How to test (browser-only smoke):"
+echo "   1. Open Camera URL on a laptop with webcam → grant permission → see 6-char pairing code"
+echo "   2. Open Viewer URL on another browser → 'Add camera' → enter the code"
+echo "   3. Tile renders live video; close + reopen viewer to verify auto-reconnect"
+echo ""
+
+# ─── Open each service in a new iTerm2 tab ──────────────────
+ENV_EXPORTS="export SIGNALING_URL='http://${LOCAL_IP}:3010' && export CAMERA_URL='http://${LOCAL_IP}:5180' && export VIEWER_URL='http://${LOCAL_IP}:5181'"
+
+osascript <<EOF
+tell application "iTerm2"
+  tell current window
+    -- Tab: Server
+    create tab with default profile
+    tell current session
+      write text "cd '${PROJECT_DIR}' && ${ENV_EXPORTS} && echo '── Server (port 3010) ──' && pnpm dev:server"
+    end tell
+
+    -- Tab: Camera
+    create tab with default profile
+    tell current session
+      write text "cd '${PROJECT_DIR}' && ${ENV_EXPORTS} && echo '── Camera (port 5180) ──' && pnpm dev:camera"
+    end tell
+
+    -- Tab: Viewer (web by default; for native run: pnpm --filter @sentinel-monitor/viewer dev:ios)
+    create tab with default profile
+    tell current session
+      write text "cd '${PROJECT_DIR}' && ${ENV_EXPORTS} && echo '── Viewer (web on 5181, Metro on 8081) ──' && pnpm --filter @sentinel-monitor/viewer dev:web"
+    end tell
+  end tell
+end tell
+EOF
