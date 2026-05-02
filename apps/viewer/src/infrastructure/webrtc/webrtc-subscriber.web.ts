@@ -18,7 +18,16 @@ export interface BrowserWebRtcSubscriberOptions {
   readonly emitSignal: (payload: SignalPayload) => void;
   readonly rtcConfig?: RTCConfiguration;
   readonly peerFactory?: PeerFactory;
+  /**
+   * Minimum interval (ms) between consecutive ICE restart attempts.
+   * Prevents tight restart loops when the connection flaps. Defaults to 5000.
+   */
+  readonly iceRestartMinIntervalMs?: number;
+  /** Override the time source — primarily for tests. */
+  readonly now?: () => number;
 }
+
+const DEFAULT_ICE_RESTART_MIN_INTERVAL_MS = 5_000;
 
 export class BrowserWebRtcSubscriber implements IWebRtcSubscriberRepository {
   private readonly pc: RTCPeerConnection;
@@ -26,10 +35,17 @@ export class BrowserWebRtcSubscriber implements IWebRtcSubscriberRepository {
   private remoteStream: MediaStream | null = null;
   private trackHandler: ((stream: MediaStream) => void) | null = null;
   private stateHandler: ((state: SubscriberState) => void) | null = null;
+  private lastIceRestartAt: number | null = null;
+  private iceRestartInFlight = false;
+  private readonly iceRestartMinIntervalMs: number;
+  private readonly now: () => number;
 
   constructor(private readonly options: BrowserWebRtcSubscriberOptions) {
     const factory = options.peerFactory ?? ((c) => new RTCPeerConnection(c));
     this.pc = factory(options.rtcConfig ?? WEBRTC_CONFIG);
+    this.iceRestartMinIntervalMs =
+      options.iceRestartMinIntervalMs ?? DEFAULT_ICE_RESTART_MIN_INTERVAL_MS;
+    this.now = options.now ?? ((): number => Date.now());
 
     this.pc.ontrack = (event): void => {
       // Prefer the stream the remote attached the track to. Fallback
@@ -51,6 +67,44 @@ export class BrowserWebRtcSubscriber implements IWebRtcSubscriberRepository {
     this.pc.onconnectionstatechange = (): void => {
       this.setState(mapPeerState(this.pc.connectionState));
     };
+
+    this.pc.oniceconnectionstatechange = (): void => {
+      if (this.pc.iceConnectionState === 'disconnected') {
+        void this.maybeRestartIce();
+      }
+    };
+  }
+
+  /**
+   * Trigger an ICE restart, debounced so we don't loop on a flapping
+   * connection. Generates a fresh offer with `iceRestart: true` and
+   * forwards it through the signaling channel; the camera will reply
+   * with a new answer carrying refreshed ICE credentials.
+   */
+  private async maybeRestartIce(): Promise<void> {
+    if (this.iceRestartInFlight) return;
+    if (this.state === 'closed') return;
+    const ts = this.now();
+    if (
+      this.lastIceRestartAt !== null &&
+      ts - this.lastIceRestartAt < this.iceRestartMinIntervalMs
+    ) {
+      return;
+    }
+
+    this.iceRestartInFlight = true;
+    this.lastIceRestartAt = ts;
+    try {
+      this.pc.restartIce();
+      const offer = await this.pc.createOffer({ iceRestart: true });
+      await this.pc.setLocalDescription(offer);
+      this.options.emitSignal({ type: 'offer', sdp: offer.sdp ?? '' });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[viewer] ICE restart failed', err);
+    } finally {
+      this.iceRestartInFlight = false;
+    }
   }
 
   async connect(_cameraId: string): Promise<void> {

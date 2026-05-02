@@ -14,6 +14,7 @@ interface FakeSignaling {
   subscribeCalls: Array<readonly string[]>;
   queryCalls: Array<readonly string[]>;
   presenceHandlers: Array<(c: PresenceChangeDto) => void>;
+  reconnectHandlers: Array<() => void>;
   queryResult: { online: readonly string[] };
   repo: ISignalingRepository;
 }
@@ -26,6 +27,7 @@ function createFakeSignaling(initiallyConnected = false): FakeSignaling {
     subscribeCalls: [],
     queryCalls: [],
     presenceHandlers: [],
+    reconnectHandlers: [],
     queryResult: { online: [] },
     repo: {} as ISignalingRepository,
   };
@@ -60,6 +62,12 @@ function createFakeSignaling(initiallyConnected = false): FakeSignaling {
     },
     offPresenceChange: (h) => {
       f.presenceHandlers = f.presenceHandlers.filter((x) => x !== h);
+    },
+    onReconnect: (h) => {
+      f.reconnectHandlers.push(h);
+    },
+    offReconnect: (h) => {
+      f.reconnectHandlers = f.reconnectHandlers.filter((x) => x !== h);
     },
   };
   return f;

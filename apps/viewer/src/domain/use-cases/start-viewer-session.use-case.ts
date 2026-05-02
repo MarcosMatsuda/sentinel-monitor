@@ -54,10 +54,16 @@ export class StartViewerSessionUseCase {
     if (cameraIds.length === 0) {
       const noopHandler = (_change: PresenceChangeDto): void => undefined;
       signaling.onPresenceChange(noopHandler);
+      const noopReconnect = (): void => {
+        // No bindings — only re-register presence on reconnect.
+        signaling.registerPresence(dashboardId);
+      };
+      signaling.onReconnect(noopReconnect);
       return {
         connections,
         stop: async () => {
           signaling.offPresenceChange(noopHandler);
+          signaling.offReconnect(noopReconnect);
         },
       };
     }
@@ -103,10 +109,54 @@ export class StartViewerSessionUseCase {
 
     signaling.onPresenceChange(presenceHandler);
 
+    const reconnectHandler = (): void => {
+      // Reconverge after a transport reconnect:
+      //   1. Re-register presence (server may have forgotten us)
+      //   2. Re-subscribe to the same camera set
+      //   3. Re-query the current presence snapshot
+      //   4. Drop peers that are no longer online; connect to fresh ones
+      signaling.registerPresence(dashboardId);
+      signaling.subscribePresence(cameraIds);
+      void signaling
+        .queryPresence(cameraIds)
+        .then((snap) => {
+          onPresenceSnapshot(snap.online);
+          const onlineSet = new Set(snap.online);
+          // Close stale peers — anything we held open but is now offline.
+          for (const [id, conn] of connections) {
+            if (!onlineSet.has(id)) {
+              conn.close();
+              connections.delete(id);
+              onPresenceChange(id, false);
+            }
+          }
+          // Open fresh peers for online cameras we don't already have.
+          for (const id of snap.online) {
+            if (connections.has(id)) continue;
+            void connectToCamera
+              .execute(id)
+              .then((conn) => {
+                connections.set(id, conn);
+                onPresenceChange(id, true);
+              })
+              .catch((err) => {
+                // eslint-disable-next-line no-console
+                console.warn(`[viewer] reconnect (re-converge) failed for ${id}`, err);
+              });
+          }
+        })
+        .catch((err) => {
+          // eslint-disable-next-line no-console
+          console.warn('[viewer] reconnect re-query failed', err);
+        });
+    };
+    signaling.onReconnect(reconnectHandler);
+
     return {
       connections,
       stop: async () => {
         signaling.offPresenceChange(presenceHandler);
+        signaling.offReconnect(reconnectHandler);
         for (const conn of connections.values()) conn.close();
         connections.clear();
       },

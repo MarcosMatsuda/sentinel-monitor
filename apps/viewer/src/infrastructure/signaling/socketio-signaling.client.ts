@@ -30,6 +30,14 @@ const defaultFactory = (url: string): TypedSocket =>
   io(url, {
     autoConnect: false,
     transports: ['websocket'],
+    // Socket.IO already implements exponential backoff with jitter — we
+    // make the configuration explicit so reconnection behavior is
+    // documented and predictable across environments.
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 1_000,
+    reconnectionDelayMax: 10_000,
+    randomizationFactor: 0.5,
   }) as TypedSocket;
 
 function isPairingError(
@@ -44,10 +52,24 @@ function isPairingError(
 
 export class SocketIoSignalingClient implements ISignalingRepository {
   private readonly socket: TypedSocket;
+  private readonly reconnectHandlers = new Set<() => void>();
+  private hasConnectedOnce = false;
 
   constructor(options: SocketIoSignalingClientOptions) {
     const factory = options.socketFactory ?? defaultFactory;
     this.socket = factory(options.url);
+
+    // Socket.IO emits `connect` on both the initial connect and every
+    // subsequent automatic reconnect. We treat any post-initial
+    // `connect` as a reconnect signal so callers can re-emit
+    // presence/subscriptions and reconverge their state.
+    this.socket.on('connect', () => {
+      if (!this.hasConnectedOnce) {
+        this.hasConnectedOnce = true;
+        return;
+      }
+      for (const handler of this.reconnectHandlers) handler();
+    });
   }
 
   connect(): Promise<void> {
@@ -130,5 +152,13 @@ export class SocketIoSignalingClient implements ISignalingRepository {
 
   offPresenceChange(handler: (change: PresenceChangeDto) => void): void {
     this.socket.off('presence-change', handler);
+  }
+
+  onReconnect(handler: () => void): void {
+    this.reconnectHandlers.add(handler);
+  }
+
+  offReconnect(handler: () => void): void {
+    this.reconnectHandlers.delete(handler);
   }
 }
