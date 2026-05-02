@@ -1,7 +1,14 @@
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Animated, {
+  FadeIn,
+  FadeOut,
+  LinearTransition,
+} from 'react-native-reanimated';
 import type { CameraBindingEntity } from '@/domain/entities/camera-binding.entity';
 import type { ConnectionState } from '@sentinel-monitor/shared-types';
-import { getStatusColor, radii, semantic, spacing, typography } from '../theme';
+import { radii, semantic, spacing, typography } from '../theme';
+import { MuteToggle } from './mute-toggle.component';
+import { PresenceDot } from './presence-dot.component';
 import { VideoSurface } from './video-surface';
 
 export interface CameraTileProps {
@@ -9,8 +16,10 @@ export interface CameraTileProps {
   readonly stream?: MediaStream | null;
   readonly state?: ConnectionState;
   readonly online?: boolean;
+  readonly muted?: boolean;
   readonly onPress?: () => void;
   readonly onLongPress?: () => void;
+  readonly onToggleMute?: () => void;
 }
 
 function resolveStatus(
@@ -44,46 +53,64 @@ export function CameraTile({
   stream = null,
   state,
   online,
+  muted = false,
   onPress,
   onLongPress,
+  onToggleMute,
 }: CameraTileProps): JSX.Element {
   const status = resolveStatus(online, state);
-  const statusColor = getStatusColor(status);
   const showVideo = status === 'connected' && stream !== null;
 
   return (
-    <TouchableOpacity
-      style={styles.tile}
-      onPress={onPress}
-      onLongPress={onLongPress}
-      accessibilityLabel={`camera-tile-${binding.id}`}
+    <Animated.View
+      style={styles.tileWrapper}
+      layout={LinearTransition.duration(250)}
+      entering={FadeIn.duration(200)}
+      exiting={FadeOut.duration(150)}
     >
-      <View style={styles.placeholder}>
-        {showVideo ? (
-          <View style={StyleSheet.absoluteFill}>
-            <VideoSurface stream={stream} muted={false} />
-          </View>
-        ) : (
-          <Text style={styles.placeholderText}>{statusLabel(status)}</Text>
-        )}
-      </View>
-      <View style={styles.footer}>
-        <View
-          style={[styles.statusDot, { backgroundColor: statusColor }]}
-          accessibilityLabel={`presence-dot-${status}`}
-        />
-        <Text style={styles.label} numberOfLines={1}>
-          {binding.label}
-        </Text>
-      </View>
-    </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.tile}
+        onPress={onPress}
+        onLongPress={onLongPress}
+        accessibilityLabel={`camera-tile-${binding.id}`}
+        activeOpacity={0.85}
+      >
+        <View style={styles.placeholder}>
+          {showVideo ? (
+            <View style={StyleSheet.absoluteFill}>
+              <VideoSurface stream={stream} muted={muted} />
+            </View>
+          ) : (
+            <Text style={styles.placeholderText}>{statusLabel(status)}</Text>
+          )}
+          {onToggleMute ? (
+            <View style={styles.muteSlot}>
+              <MuteToggle
+                muted={muted}
+                onToggle={onToggleMute}
+                cameraId={binding.id}
+              />
+            </View>
+          ) : null}
+        </View>
+        <View style={styles.footer}>
+          <PresenceDot state={status} />
+          <Text style={styles.label} numberOfLines={1}>
+            {binding.label}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  tile: {
+  tileWrapper: {
     flex: 1,
     margin: spacing[1],
+  },
+  tile: {
+    flex: 1,
     backgroundColor: semantic.bg.surface,
     borderRadius: radii.md,
     overflow: 'hidden',
@@ -100,16 +127,16 @@ const styles = StyleSheet.create({
     color: semantic.text.muted,
     fontSize: typography.size.sm,
   },
+  muteSlot: {
+    position: 'absolute',
+    top: spacing[2],
+    right: spacing[2],
+  },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: spacing[2],
     gap: spacing[2],
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: radii.full,
   },
   label: {
     color: semantic.text.primary,
