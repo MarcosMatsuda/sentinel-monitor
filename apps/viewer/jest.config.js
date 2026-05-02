@@ -31,6 +31,7 @@ module.exports = {
     'src/domain/**/*.ts',
     'src/presentation/stores/**/*.ts',
     'src/infrastructure/signaling/**/*.ts',
+    'src/infrastructure/webrtc/webrtc-subscriber.native.ts',
   ],
   coverageThreshold: {
     global: {

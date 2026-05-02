@@ -19,7 +19,18 @@ const config: ExpoConfig = {
     bundler: 'metro',
     output: 'single',
   },
-  plugins: ['expo-router'],
+  plugins: [
+    'expo-router',
+    [
+      '@config-plugins/react-native-webrtc',
+      {
+        cameraPermission:
+          'Sentinel Monitor needs camera access for two-way video (future).',
+        microphonePermission:
+          'Sentinel Monitor needs microphone access to talk back to the camera.',
+      },
+    ],
+  ],
   experiments: {
     typedRoutes: true,
   },

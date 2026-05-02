@@ -32,36 +32,47 @@ pnpm --filter @sentinel-monitor/viewer typecheck
 
 ## EAS dev client (iOS / Android)
 
-`react-native-webrtc` (PR6) requires a custom dev client — Expo Go is not
-supported. After installing dependencies:
+`react-native-webrtc` ships native modules — Expo Go is **not** supported.
+You must build a custom dev client once per platform, then run Metro
+against it.
 
 ```sh
-# 1. Login once
+# 1. Install deps from the repo root
+pnpm install
+
+# 2. Generate native projects (writes ios/ + android/)
+pnpm --filter @sentinel-monitor/viewer exec expo prebuild --clean
+
+# 3. (One-time) authenticate with EAS
 eas login
 
-# 2. Configure builds
-eas build:configure
-
-# 3. Build a development client for the simulator/device
+# 4. Build a dev client
+#    iOS simulator (fastest local loop):
 eas build --profile development --platform ios
+#    Android emulator / device:
 eas build --profile development --platform android
+
+# 5. Install the resulting build on the simulator/device, then start Metro
+pnpm --filter @sentinel-monitor/viewer dev
 ```
 
-Suggested `eas.json` (commit alongside the first EAS build, not part of PR5):
+The `development` profile in `eas.json` enables `developmentClient: true`
+and targets the iOS simulator + an Android APK so you can sideload
+locally without a Play Store account.
 
-```json
-{
-  "cli": { "version": ">= 12.0.0" },
-  "build": {
-    "development": {
-      "developmentClient": true,
-      "distribution": "internal"
-    },
-    "preview": { "distribution": "internal" },
-    "production": {}
-  }
-}
-```
+The Expo plugin `@config-plugins/react-native-webrtc` (wired in
+`app.config.ts`) handles the iOS Info.plist usage strings and the
+Android `CAMERA` / `RECORD_AUDIO` permissions during prebuild.
+
+### Smoke test (manual)
+
+Native WebRTC cannot be exercised from CI — verify on real runtimes:
+
+1. Start the signaling server (`apps/server`).
+2. Pair a camera (`apps/camera`) and copy the pairing code.
+3. Launch the viewer dev client; redeem the code.
+4. Confirm the remote video renders inside the camera tile and that
+   `connectionState` reaches `connected`.
 
 ## Storage
 
@@ -82,7 +93,3 @@ For tests, `in-memory-binding-storage.ts` provides a deterministic adapter.
 | Add/remove/rename    | `src/domain/use-cases/{add,remove,rename}-camera.*`    |
 | State + persistence  | `src/presentation/stores/bindings.store.ts`            |
 
-## TODO (PR6)
-
-- `ConnectToCameraUseCase` — opens the WebRTC peer connection after a
-  successful pairing, replacing the stub `resolveCameraId` in `add-camera`.
