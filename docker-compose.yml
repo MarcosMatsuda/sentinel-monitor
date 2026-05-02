@@ -1,0 +1,28 @@
+# Local infra for the Sentinel Monitor signaling server.
+# Camera and viewer apps are static deploys; you run them with their own dev
+# scripts (Vite / Expo) and point them at the server URL exposed below.
+
+services:
+  server:
+    container_name: sentinel-server
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    image: sentinel-monitor/server:local
+    restart: unless-stopped
+    ports:
+      - "${SERVER_PORT:-3010}:3010"
+    environment:
+      NODE_ENV: production
+      PORT: 3010
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      TURN_URL: ${TURN_URL:-}
+      TURN_USER: ${TURN_USER:-}
+      TURN_PASS: ${TURN_PASS:-}
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:3010/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
