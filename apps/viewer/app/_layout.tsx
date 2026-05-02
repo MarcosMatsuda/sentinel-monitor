@@ -2,14 +2,23 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { initBindingsStore } from '@/presentation/bootstrap';
+import { initRuntime } from '@/presentation/bootstrap';
 
 export default function RootLayout(): JSX.Element | null {
   const [ready, setReady] = useState<boolean>(false);
 
   useEffect(() => {
-    const store = initBindingsStore();
-    void store.getState().hydrate().finally(() => setReady(true));
+    const runtime = initRuntime();
+    void runtime
+      .start()
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.warn('[viewer] start failed', err);
+      })
+      .finally(() => setReady(true));
+    return () => {
+      void runtime.stop();
+    };
   }, []);
 
   if (!ready) return null;

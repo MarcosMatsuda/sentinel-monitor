@@ -5,7 +5,7 @@
     "lib": ["ES2022", "DOM"],
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "types": ["jest"],
+    "types": ["jest", "node"],
     "allowSyntheticDefaultImports": true,
     "noEmit": true,
     "paths": {

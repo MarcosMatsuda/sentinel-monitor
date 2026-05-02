@@ -30,6 +30,7 @@ module.exports = {
   collectCoverageFrom: [
     'src/domain/**/*.ts',
     'src/presentation/stores/**/*.ts',
+    'src/infrastructure/signaling/**/*.ts',
   ],
   coverageThreshold: {
     global: {
