@@ -2,11 +2,15 @@ import { useMemo, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ComputeGridLayoutUseCase } from '@/domain/use-cases/compute-grid-layout.use-case';
+import { ToggleCameraMuteUseCase } from '@/domain/use-cases/toggle-camera-mute.use-case';
 import { AddCameraModal } from '@/presentation/components/add-camera-modal';
 import { CameraTile } from '@/presentation/components/camera-tile.component';
 import { EmptyState } from '@/presentation/components/empty-state';
 import { useBindingsStore } from '@/presentation/stores/bindings.store';
-import { usePeersStore } from '@/presentation/stores/peers.store';
+import {
+  getPeersStoreSingleton,
+  usePeersStore,
+} from '@/presentation/stores/peers.store';
 import { usePresenceStore } from '@/presentation/stores/presence.store';
 import { radii, semantic, spacing, typography } from '@/presentation/theme';
 
@@ -17,7 +21,18 @@ export default function GridScreen(): JSX.Element {
   const bindings = useBindingsStore((s) => s.bindings);
   const addCamera = useBindingsStore((s) => s.addCamera);
   const removeCamera = useBindingsStore((s) => s.removeCamera);
+  const peers = usePeersStore((s) => s.peers);
+  const mutes = usePeersStore((s) => s.mutes);
+  const online = usePresenceStore((s) => s.online);
   const [modalOpen, setModalOpen] = useState<boolean>(false);
+
+  const toggleMuteUC = useMemo(
+    () =>
+      new ToggleCameraMuteUseCase({
+        store: getPeersStoreSingleton().getState(),
+      }),
+    [],
+  );
 
   const layout = useMemo(() => layoutUC.execute(bindings.length), [bindings]);
 
@@ -46,16 +61,28 @@ export default function GridScreen(): JSX.Element {
       <View style={styles.grid}>
         {rows.map((row, rowIdx) => (
           <View key={`row-${rowIdx}`} style={styles.row}>
-            {row.map((b) => (
-              <CameraTile
-                key={b.id}
-                binding={b}
-                onPress={() => router.push(`/camera/${b.id}`)}
-                onLongPress={() => {
-                  void removeCamera(b.id);
-                }}
-              />
-            ))}
+            {row.map((b) => {
+              const peer = peers[b.id];
+              const presenceKnown = b.id in online;
+              const isOnline = presenceKnown ? online[b.id] : undefined;
+              return (
+                <CameraTile
+                  key={b.id}
+                  binding={b}
+                  stream={peer?.stream ?? null}
+                  state={peer?.state}
+                  online={isOnline}
+                  muted={mutes[b.id] ?? false}
+                  onPress={() => router.push(`/camera/${b.id}`)}
+                  onLongPress={() => {
+                    void removeCamera(b.id);
+                  }}
+                  onToggleMute={() => {
+                    toggleMuteUC.execute(b.id);
+                  }}
+                />
+              );
+            })}
           </View>
         ))}
       </View>
