@@ -16,11 +16,34 @@ import { HandleDisconnectUseCase } from './domain/use-cases/handle-disconnect.us
 import { RedeemPairingCodeUseCase } from './domain/use-cases/redeem-pairing-code.use-case';
 import { RegisterPresenceUseCase } from './domain/use-cases/register-presence.use-case';
 import { RouteSignalUseCase } from './domain/use-cases/route-signal.use-case';
+import {
+  describeEnv,
+  EnvValidationError,
+  loadEnv,
+  type IServerEnv,
+} from './infrastructure/config/env';
+import { createLogger } from './infrastructure/logging/logger';
 import { HealthHandler } from './presentation/handlers/health.handler';
 import { SocketHandler } from './presentation/handlers/socket.handler';
 
-const PORT = Number(process.env.PORT ?? 3010);
-const CORS_ORIGIN = process.env.CORS_ORIGIN ?? '*';
+let env: IServerEnv;
+try {
+  env = loadEnv();
+} catch (err) {
+  // Logger not yet built; emit a single bootstrap error and exit.
+  // eslint-disable-next-line no-console
+  console.error(
+    err instanceof EnvValidationError ? err.message : 'Failed to load environment',
+  );
+  process.exit(1);
+}
+
+const logger = createLogger({
+  level: env.LOG_LEVEL,
+  pretty: env.NODE_ENV !== 'production',
+});
+
+logger.info({ event: 'boot.env', config: describeEnv(env) }, 'environment loaded');
 
 // ---- Repositories (data layer) ----
 const presenceRepo = new InMemoryPeerPresenceRepository();
@@ -37,7 +60,7 @@ const handleDisconnect = new HandleDisconnectUseCase(presenceRepo);
 const app = express();
 const httpServer = createServer(app);
 const io = new Server<IClientToServerEvents, IServerToClientEvents>(httpServer, {
-  cors: { origin: CORS_ORIGIN },
+  cors: { origin: env.CORS_ORIGIN },
 });
 
 // ---- Presentation handlers ----
@@ -49,9 +72,20 @@ new SocketHandler({
   routeSignal,
   handleDisconnect,
   presence: presenceRepo,
+  logger,
 }).register(io);
 
-httpServer.listen(PORT, () => {
-  // eslint-disable-next-line no-console
-  console.log(`Sentinel signaling server listening on :${PORT}`);
+httpServer.listen(env.PORT, () => {
+  logger.info(
+    { event: 'boot.listening', port: env.PORT },
+    `Sentinel signaling server listening on :${env.PORT}`,
+  );
 });
+
+const shutdown = (signal: string): void => {
+  logger.info({ event: 'boot.shutdown', signal }, 'shutting down');
+  httpServer.close(() => process.exit(0));
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
