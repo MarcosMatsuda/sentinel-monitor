@@ -1,0 +1,10 @@
+node_modules
+dist
+coverage
+*.log
+.DS_Store
+gateway.yaml
+.env
+.env.*
+!.env.example
+tests
