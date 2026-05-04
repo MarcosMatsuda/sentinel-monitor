@@ -1,0 +1,21 @@
+# Sentinel Monitor LAN gateway — example config.
+# Copy to gateway.yaml and adjust for your home setup.
+#
+# IDs are optional on first boot — the gateway generates UUIDs and
+# writes them back so identity is stable across restarts.
+
+gateway:
+  # id: <generated on first boot if missing>
+  signalingUrl: "https://sentinel-server.onrender.com"
+  go2rtcUrl: "http://127.0.0.1:1984"
+
+  cameras:
+    - label: "Sala"
+      rtspUrl: "rtsp://USER:PASS@192.168.0.42:554/stream2"
+      # id: <generated on first boot if missing>
+
+    - label: "Quarto"
+      rtspUrl: "rtsp://USER:PASS@192.168.0.43:554/stream2"
+
+    - label: "Rua"
+      rtspUrl: "rtsp://USER:PASS@192.168.0.44:554/stream1"
