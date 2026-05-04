@@ -7,6 +7,12 @@ coverage/
 .env.local
 .env.*.local
 
+# Gateway runtime config — contains RTSP creds and dashboard pairings.
+# Only the example file (apps/gateway/gateway.yaml.example) is committed.
+/gateway/
+/apps/gateway/gateway.yaml
+/apps/gateway/go2rtc.yaml
+
 # Expo
 .expo/
 *.jks

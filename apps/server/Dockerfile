@@ -15,7 +15,7 @@ WORKDIR /repo
 RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 
 # Copy workspace manifests first for better layer caching.
-COPY pnpm-workspace.yaml pnpm-lock.yaml package.json turbo.json tsconfig.base.json ./
+COPY .npmrc pnpm-workspace.yaml pnpm-lock.yaml package.json turbo.json tsconfig.base.json ./
 COPY apps/server/package.json apps/server/
 COPY packages/shared-types/package.json packages/shared-types/
 
@@ -25,6 +25,7 @@ RUN pnpm install --frozen-lockfile --filter @sentinel-monitor/server...
 COPY packages/shared-types packages/shared-types
 COPY apps/server apps/server
 
+RUN pnpm --filter @sentinel-monitor/shared-types build
 RUN pnpm --filter @sentinel-monitor/server build
 
 # ---------- Stage 2: prune ----------
@@ -34,7 +35,7 @@ WORKDIR /repo
 
 RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 
-COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY .npmrc pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY apps/server/package.json apps/server/
 COPY packages/shared-types/package.json packages/shared-types/
 COPY packages/shared-types packages/shared-types
@@ -49,10 +50,11 @@ ENV NODE_ENV=production \
     PORT=3010 \
     LOG_LEVEL=info
 
-# Bring in pruned node_modules from the workspace plus compiled JS.
+# node-linker=hoisted → all deps land in the workspace root node_modules (flat, no symlinks).
+# shared-types is compiled to dist/ so Node.js can require it at runtime.
 COPY --from=prune /repo/node_modules /app/node_modules
-COPY --from=prune /repo/apps/server/node_modules /app/node_modules
-COPY --from=prune /repo/packages /app/packages
+COPY --from=build /repo/packages/shared-types/dist /app/node_modules/@sentinel-monitor/shared-types/dist
+COPY --from=build /repo/packages/shared-types/package.json /app/node_modules/@sentinel-monitor/shared-types/package.json
 COPY --from=build /repo/apps/server/dist /app/dist
 COPY --from=build /repo/apps/server/package.json /app/package.json
 
