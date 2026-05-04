@@ -1,7 +1,7 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════
 # Sentinel Monitor — one-command dev launch
-# Server (3010) + Camera (5180) + Viewer (5181 web / 8081 Metro)
+# Server (3010) + go2rtc (1984) + Gateway (9090) + Viewer (5181 web / 8081 Metro)
 # Each service opens in its own iTerm2 tab
 # ═══════════════════════════════════════════════════════════
 
@@ -22,7 +22,7 @@ else
 fi
 
 # ─── Kill existing processes on used ports ──────────────────
-for port in 3010 5180 5181 8081; do
+for port in 3010 1984 8554 8555 9090 5181 8081; do
   pids=$(lsof -ti:$port 2>/dev/null)
   if [ -n "$pids" ]; then
     echo "$pids" | xargs kill -9 2>/dev/null
@@ -32,7 +32,7 @@ done
 
 sleep 2
 
-for port in 3010 5180 5181 8081; do
+for port in 3010 1984 8554 8555 9090 5181 8081; do
   pids=$(lsof -ti:$port 2>/dev/null)
   if [ -n "$pids" ]; then
     echo "$pids" | xargs kill -9 2>/dev/null
@@ -44,6 +44,36 @@ done
 if ! which pnpm > /dev/null 2>&1; then
   echo "   pnpm not found — run: npm install -g pnpm"
   exit 1
+fi
+
+# ─── Check go2rtc ────────────────────────────────────────────
+if ! which go2rtc > /dev/null 2>&1; then
+  echo "   go2rtc not found — run:"
+  echo "   curl -L https://github.com/AlexxIT/go2rtc/releases/latest/download/go2rtc_mac_arm64.zip -o /tmp/go2rtc.zip"
+  echo "   unzip /tmp/go2rtc.zip -d /tmp/go2rtc && mv /tmp/go2rtc/go2rtc /usr/local/bin/go2rtc && chmod +x /usr/local/bin/go2rtc"
+  exit 1
+fi
+
+# ─── Check gateway config ────────────────────────────────────
+GATEWAY_CONFIG="$PROJECT_DIR/gateway/gateway.yaml"
+if [ ! -f "$GATEWAY_CONFIG" ]; then
+  echo "   gateway/gateway.yaml not found — run:"
+  echo "   mkdir -p '$PROJECT_DIR/gateway'"
+  echo "   cp '$PROJECT_DIR/apps/gateway/gateway.yaml.example' '$GATEWAY_CONFIG'"
+  echo "   Then edit it with your camera RTSP URL and set signalingUrl to http://localhost:3010"
+  exit 1
+fi
+
+GO2RTC_CONFIG="$PROJECT_DIR/gateway/go2rtc.yaml"
+if [ ! -f "$GO2RTC_CONFIG" ]; then
+  echo "   gateway/go2rtc.yaml not found — creating default…"
+  mkdir -p "$PROJECT_DIR/gateway"
+  cat > "$GO2RTC_CONFIG" << 'YAML'
+api:
+  listen: ":1984"
+webrtc:
+  listen: ":8555"
+YAML
 fi
 
 # ─── Check .env ──────────────────────────────────────────────
@@ -66,40 +96,45 @@ export VIEWER_URL="http://${LOCAL_IP}:5181"
 
 echo ""
 echo "   ┌──────────────────────────────────────────────────┐"
-echo "   │  Server:  http://${LOCAL_IP}:3010                  "
-echo "   │  Camera:  http://${LOCAL_IP}:5180                  "
-echo "   │  Viewer:  http://${LOCAL_IP}:5181  (web)           "
-echo "   │  Viewer:  Metro on 8081           (native)         "
+echo "   │  Server:   http://localhost:3010                  "
+echo "   │  go2rtc:   http://localhost:1984                  "
+echo "   │  Gateway:  http://127.0.0.1:9090/pairing          "
+echo "   │  Viewer:   http://${LOCAL_IP}:5181  (web)         "
+echo "   │  Viewer:   Metro on 8081            (native)      "
 echo "   └──────────────────────────────────────────────────┘"
 echo ""
-echo "   How to test (browser-only smoke):"
-echo "   1. Open Camera URL on a laptop with webcam → grant permission → see 6-char pairing code"
-echo "   2. Open Viewer URL on another browser → 'Add camera' → enter the code"
-echo "   3. Tile renders live video; close + reopen viewer to verify auto-reconnect"
+echo "   How to test with Tapo C200:"
+echo "   1. Wait for gateway logs: pairing.code_issued code=XXXXXX"
+echo "   2. Open Viewer URL → 'Add camera' → enter the 6-char code"
+echo "   3. Video tile appears; binding is saved — restarts reconnect automatically"
 echo ""
 
 # ─── Open each service in a new iTerm2 tab ──────────────────
-ENV_EXPORTS="export SIGNALING_URL='http://${LOCAL_IP}:3010' && export CAMERA_URL='http://${LOCAL_IP}:5180' && export VIEWER_URL='http://${LOCAL_IP}:5181'"
-
 osascript <<EOF
 tell application "iTerm2"
   tell current window
-    -- Tab: Server
+    -- Tab: Server (Docker)
     create tab with default profile
     tell current session
-      write text "cd '${PROJECT_DIR}' && ${ENV_EXPORTS} && echo '── Server (port 3010) ──' && pnpm dev:server"
+      write text "cd '${PROJECT_DIR}' && echo '── Server (port 3010) ──' && docker compose up server"
     end tell
 
-    -- Tab: Camera
+    -- Tab: go2rtc
     create tab with default profile
     tell current session
-      write text "cd '${PROJECT_DIR}' && ${ENV_EXPORTS} && echo '── Camera (port 5180) ──' && pnpm dev:camera"
+      write text "echo '── go2rtc (port 1984) ──' && go2rtc -config '${PROJECT_DIR}/gateway/go2rtc.yaml'"
     end tell
 
-    -- Tab: Viewer (web by default; for native run: pnpm --filter @sentinel-monitor/viewer dev:ios)
+    -- Tab: Gateway
     create tab with default profile
     tell current session
-      write text "cd '${PROJECT_DIR}' && ${ENV_EXPORTS} && echo '── Viewer (web on 5181, Metro on 8081) ──' && pnpm --filter @sentinel-monitor/viewer dev:web"
+      write text "cd '${PROJECT_DIR}' && echo '── Gateway (port 9090) ──' && GATEWAY_CONFIG_PATH='${GATEWAY_CONFIG}' pnpm --filter @sentinel-monitor/gateway dev"
+    end tell
+
+    -- Tab: Viewer
+    create tab with default profile
+    tell current session
+      write text "cd '${PROJECT_DIR}' && echo '── Viewer (web on 5181, Metro on 8081) ──' && EXPO_PUBLIC_SIGNALING_URL='http://localhost:3010' pnpm --filter @sentinel-monitor/viewer dev:web"
     end tell
   end tell
 end tell
