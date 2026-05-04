@@ -1,0 +1,32 @@
+{
+  "name": "@sentinel-monitor/gateway",
+  "version": "0.0.1",
+  "private": true,
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'no lint configured yet'",
+    "test": "jest",
+    "test:unit": "jest --testPathPattern=tests/unit",
+    "clean": "rm -rf dist coverage"
+  },
+  "dependencies": {
+    "@sentinel-monitor/shared-types": "workspace:*",
+    "@sentinel-monitor/webrtc-config": "workspace:*",
+    "pino": "^9.5.0",
+    "yaml": "^2.6.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.0.0",
+    "jest": "^29.7.0",
+    "pino-pretty": "^11.3.0",
+    "ts-jest": "^29.2.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
