@@ -20,6 +20,7 @@ export interface CameraTileProps {
   readonly onPress?: () => void;
   readonly onLongPress?: () => void;
   readonly onToggleMute?: () => void;
+  readonly onRemove?: () => void;
 }
 
 function resolveStatus(
@@ -57,6 +58,7 @@ export function CameraTile({
   onPress,
   onLongPress,
   onToggleMute,
+  onRemove,
 }: CameraTileProps): JSX.Element {
   const status = resolveStatus(online, state);
   const showVideo = status === 'connected' && stream !== null;
@@ -91,6 +93,20 @@ export function CameraTile({
                 cameraId={binding.id}
               />
             </View>
+          ) : null}
+          {onRemove ? (
+            <TouchableOpacity
+              style={styles.removeSlot}
+              onPress={(e) => {
+                e.stopPropagation?.();
+                onRemove();
+              }}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={`remove-camera-${binding.id}`}
+            >
+              <Text style={styles.removeIcon}>✕</Text>
+            </TouchableOpacity>
           ) : null}
         </View>
         <View style={styles.footer}>
@@ -131,6 +147,23 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: spacing[2],
     right: spacing[2],
+  },
+  removeSlot: {
+    position: 'absolute',
+    top: spacing[2],
+    left: spacing[2],
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  removeIcon: {
+    color: '#fff',
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.medium,
+    lineHeight: typography.size.sm + 2,
   },
   footer: {
     flexDirection: 'row',

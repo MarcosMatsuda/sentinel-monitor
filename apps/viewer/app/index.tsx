@@ -62,9 +62,9 @@ export default function GridScreen(): JSX.Element {
         {rows.map((row, rowIdx) => (
           <View key={`row-${rowIdx}`} style={styles.row}>
             {row.map((b) => {
-              const peer = peers[b.id];
-              const presenceKnown = b.id in online;
-              const isOnline = presenceKnown ? online[b.id] : undefined;
+              const peer = peers[b.cameraId];
+              const presenceKnown = b.cameraId in online;
+              const isOnline = presenceKnown ? online[b.cameraId] : undefined;
               return (
                 <CameraTile
                   key={b.id}
@@ -79,6 +79,9 @@ export default function GridScreen(): JSX.Element {
                   }}
                   onToggleMute={() => {
                     toggleMuteUC.execute(b.id);
+                  }}
+                  onRemove={() => {
+                    void removeCamera(b.id);
                   }}
                 />
               );

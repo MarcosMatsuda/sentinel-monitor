@@ -115,7 +115,33 @@ export class BrowserWebRtcSubscriber implements IWebRtcSubscriberRepository {
 
     const offer = await this.pc.createOffer();
     await this.pc.setLocalDescription(offer);
-    this.options.emitSignal({ type: 'offer', sdp: offer.sdp ?? '' });
+
+    // Wait for ICE gathering to finish so the offer contains all candidates
+    // inline. go2rtc's WHEP impl may not return a Location header for trickle,
+    // so we rely on non-trickle (complete) offers instead.
+    await this.waitForIceGathering();
+    this.options.emitSignal({ type: 'offer', sdp: this.pc.localDescription?.sdp ?? '' });
+  }
+
+  private waitForIceGathering(): Promise<void> {
+    return new Promise((resolve) => {
+      if (this.pc.iceGatheringState === 'complete') {
+        resolve();
+        return;
+      }
+      const handler = (): void => {
+        if (this.pc.iceGatheringState === 'complete') {
+          this.pc.removeEventListener('icegatheringstatechange', handler);
+          resolve();
+        }
+      };
+      this.pc.addEventListener('icegatheringstatechange', handler);
+      // Safety timeout — resolve anyway after 5s so we never hang forever.
+      setTimeout(() => {
+        this.pc.removeEventListener('icegatheringstatechange', handler);
+        resolve();
+      }, 5_000);
+    });
   }
 
   async handleIncomingSignal(payload: SignalPayload): Promise<void> {

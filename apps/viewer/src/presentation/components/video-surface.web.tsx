@@ -13,7 +13,7 @@ export interface VideoSurfaceProps {
 
 export function VideoSurface({
   stream,
-  muted = false,
+  muted = true,
 }: VideoSurfaceProps): JSX.Element {
   const ref = useRef<HTMLVideoElement | null>(null);
 
@@ -21,7 +21,16 @@ export function VideoSurface({
     const el = ref.current;
     if (!el) return;
     if (el.srcObject !== stream) {
+      // Force muted before play() — Chrome blocks autoplay on streams with audio.
+      el.muted = true;
       el.srcObject = stream;
+      const playPromise = el.play();
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(() => {
+          // Autoplay may still be blocked on some browsers; the user can
+          // interact with the tile to start playback manually.
+        });
+      }
     }
   }, [stream]);
 
@@ -34,7 +43,7 @@ export function VideoSurface({
       style={{
         width: '100%',
         height: '100%',
-        objectFit: 'cover',
+        objectFit: 'contain',
         backgroundColor: '#000',
       }}
     />
