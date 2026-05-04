@@ -26,3 +26,52 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # LAN gateway stack — opt in via `--profile gateway`.
+  #   docker compose --profile gateway up
+  #
+  # go2rtc bridges RTSP from your IP cams (Tapo C200, Reolink, etc.) to WebRTC.
+  # The gateway service registers each camera with go2rtc, connects to the
+  # signaling server using a stable per-camera UUID, and proxies WHEP offers
+  # back to viewers anywhere on the internet.
+  # ---------------------------------------------------------------------------
+  go2rtc:
+    container_name: sentinel-go2rtc
+    image: alexxit/go2rtc:latest
+    profiles: ["gateway"]
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./gateway/go2rtc.yaml:/config/go2rtc.yaml:ro
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:1984/api/streams"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  gateway:
+    container_name: sentinel-gateway
+    build:
+      context: .
+      dockerfile: apps/gateway/Dockerfile
+    image: sentinel-monitor/gateway:local
+    profiles: ["gateway"]
+    restart: unless-stopped
+    network_mode: host
+    depends_on:
+      - go2rtc
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${GATEWAY_LOG_LEVEL:-info}
+      GATEWAY_CONFIG_PATH: /app/config/gateway.yaml
+      GATEWAY_HTTP_PORT: 9090
+    volumes:
+      - ./gateway/gateway.yaml:/app/config/gateway.yaml
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:9090/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

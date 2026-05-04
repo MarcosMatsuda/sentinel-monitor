@@ -175,6 +175,30 @@ docker compose build server && docker compose up -d server
 docker compose logs server | head -n 5
 ```
 
+## Run a real home setup with Tapo cams
+
+For the production data flow (IP cams in your LAN, viewer accessible from
+anywhere on the internet), use `apps/gateway` instead of the browser-based
+`apps/camera`.
+
+```
+[Tapo C200]──RTSP──►[go2rtc]──►[gateway]──signaling──►[server]──►[viewer anywhere]
+        (LAN — Mac/Pi running docker compose)             (Render)    (Vercel)
+```
+
+1. Confirm your Tapo speaks RTSP standalone — see
+   [`apps/gateway/README.md`](apps/gateway/README.md) "Quickstart" step 1.
+2. `cp apps/gateway/gateway.yaml.example gateway/gateway.yaml` and add
+   each camera's RTSP URL.
+3. `docker compose --profile gateway up` — boots both `go2rtc` and the
+   gateway service.
+4. Watch logs for a 6-character pairing code per camera, enter it in the
+   viewer (web or native) once. The binding persists.
+5. `curl http://127.0.0.1:9090/pairing` shows live pairing status.
+
+Full docs (config, troubleshooting, architecture):
+[`apps/gateway/README.md`](apps/gateway/README.md).
+
 ## Branching policy
 
 - `main` — locked. Receives only the v1.0.0 release merge.
