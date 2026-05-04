@@ -1,4 +1,8 @@
-import type { SignalDto } from '@sentinel-monitor/shared-types';
+import type {
+  PairingCodeIssuedDto,
+  PairingRedeemedDto,
+  SignalDto,
+} from '@sentinel-monitor/shared-types';
 
 // Gateway-side signaling client. Each camera owns one connection (one
 // `peerId = cameraId`) and listens for inbound signals + presence
@@ -24,4 +28,10 @@ export interface ISignalingClient {
   onPresenceChange(
     handler: (event: { peerId: string; online: boolean }) => void,
   ): void;
+
+  /** Request a fresh pairing code for this camera. Resolves with the code + expiry. */
+  requestPairingCode(cameraId: string): Promise<PairingCodeIssuedDto>;
+
+  /** Subscribe to pairing-redeemed pushes (operator entered our code at the dashboard). */
+  onPairingRedeemed(handler: (event: PairingRedeemedDto) => void): void;
 }
