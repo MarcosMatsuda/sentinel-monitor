@@ -2,6 +2,8 @@ import { io, type Socket } from 'socket.io-client';
 import type {
   IClientToServerEvents,
   IServerToClientEvents,
+  PairingCodeIssuedDto,
+  PairingRedeemedDto,
   PresenceChangeDto,
   SignalDto,
 } from '@sentinel-monitor/shared-types';
@@ -21,6 +23,7 @@ export class SocketIoSignalingClient implements ISignalingClient {
   private readonly socketFactory: (url: string) => TypedSocket;
   private signalHandler: ((p: SignalDto) => void) | null = null;
   private presenceHandler: ((e: PresenceChangeDto) => void) | null = null;
+  private pairingRedeemedHandler: ((e: PairingRedeemedDto) => void) | null = null;
 
   constructor(opts: SocketIoSignalingClientOptions) {
     this.logger = opts.logger;
@@ -62,6 +65,10 @@ export class SocketIoSignalingClient implements ISignalingClient {
 
     this.socket.on('presence-change', (event: PresenceChangeDto) => {
       this.presenceHandler?.(event);
+    });
+
+    this.socket.on('pairing-redeemed', (event: PairingRedeemedDto) => {
+      this.pairingRedeemedHandler?.(event);
     });
 
     return new Promise<void>((resolve, reject) => {
@@ -114,5 +121,20 @@ export class SocketIoSignalingClient implements ISignalingClient {
 
   onPresenceChange(handler: (event: PresenceChangeDto) => void): void {
     this.presenceHandler = handler;
+  }
+
+  requestPairingCode(cameraId: string): Promise<PairingCodeIssuedDto> {
+    if (!this.socket) {
+      return Promise.reject(new Error('requestPairingCode: signaling not connected'));
+    }
+    return new Promise((resolve) => {
+      this.socket!.emit('request-pairing-code', { cameraId }, (response) => {
+        resolve(response);
+      });
+    });
+  }
+
+  onPairingRedeemed(handler: (event: PairingRedeemedDto) => void): void {
+    this.pairingRedeemedHandler = handler;
   }
 }

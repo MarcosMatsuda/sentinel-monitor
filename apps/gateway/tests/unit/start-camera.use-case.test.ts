@@ -43,6 +43,8 @@ describe('StartCameraUseCase', () => {
       onPresenceChange: jest.fn((handler) => {
         presenceHandler = handler;
       }),
+      requestPairingCode: jest.fn(),
+      onPairingRedeemed: jest.fn(),
     };
 
     publisher = {

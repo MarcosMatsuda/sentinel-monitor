@@ -23,6 +23,8 @@ describe('StopCameraUseCase', () => {
       sendSignal: jest.fn(),
       onSignal: jest.fn(),
       onPresenceChange: jest.fn(),
+      requestPairingCode: jest.fn(),
+      onPairingRedeemed: jest.fn(),
     };
     publisher = {
       handleViewerSignal: jest.fn(),
