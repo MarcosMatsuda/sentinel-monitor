@@ -1,0 +1,35 @@
+# Render Blueprint for the Sentinel Monitor signaling server.
+# Render auto-detects this file at repo root and offers to import the
+# service. After import, set the secret env vars (TURN_*) in the Render
+# dashboard — they're declared as `sync: false` so Render won't push them
+# from the blueprint and they stay out of git.
+#
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: sentinel-server
+    runtime: docker
+    plan: free
+    region: oregon
+    branch: main
+    autoDeploy: false
+    dockerfilePath: ./apps/server/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3010
+      - key: LOG_LEVEL
+        value: info
+      - key: CORS_ORIGIN
+        # Update once the viewer is deployed (see PR-D2 #37).
+        value: https://sentinel-viewer.vercel.app
+      - key: TURN_URL
+        sync: false
+      - key: TURN_USER
+        sync: false
+      - key: TURN_PASS
+        sync: false
