@@ -17,9 +17,8 @@ services:
       PORT: 3010
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      TURN_URL: ${TURN_URL:-}
-      TURN_USER: ${TURN_USER:-}
-      TURN_PASS: ${TURN_PASS:-}
+      # TURN_URL / TURN_USER / TURN_PASS are optional — omit them for LAN-only setups.
+      # Set all three in a .env file when you need TURN for remote viewers behind NAT.
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:3010/health"]
       interval: 30s
