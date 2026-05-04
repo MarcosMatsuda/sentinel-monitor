@@ -85,18 +85,35 @@ The viewer and camera apps are static bundles (Expo Web export and Vite build) a
 
 ### Render free tier (signaling server)
 
-1. Push the `develop` branch to GitHub if you haven't yet.
-2. In Render, **New +** → **Web Service** → connect the GitHub repo.
-3. Configure:
-   - **Runtime**: Docker
-   - **Dockerfile path**: `apps/server/Dockerfile`
-   - **Docker build context**: repository root (`.`)
-   - **Branch**: `main` (only release tags should land here)
-   - **Auto-deploy**: off for the MVP — deploy manually after a `develop → main` merge.
-4. Add the environment variables from the table above. At minimum set `CORS_ORIGIN` to your viewer's deployed origin.
-5. **Health check path**: `/health`.
-6. Create the service. First build pulls workspace deps, compiles TypeScript, and prunes to production-only deps.
-7. Note the public URL Render assigns (e.g. `https://sentinel-server.onrender.com`); paste it into the viewer and camera builds as `VITE_SIGNALING_URL` / `EXPO_PUBLIC_SIGNALING_URL`.
+The repo ships a [`render.yaml`](render.yaml) Blueprint at the root —
+Render auto-detects it and provisions the service with the right
+Dockerfile, health check and non-secret env vars in one click.
+
+**One-shot import**:
+
+1. Make sure `main` exists with the latest release commit (the Blueprint
+   pins `branch: main` and `autoDeploy: false`).
+2. In Render: **New +** → **Blueprint** → connect this repo.
+3. Render reads `render.yaml`, shows the service plan, click **Apply**.
+4. After provisioning, open the service → **Environment** and fill in the
+   `sync: false` secrets if you need TURN: `TURN_URL`, `TURN_USER`,
+   `TURN_PASS`. Update `CORS_ORIGIN` if your viewer URL differs from the
+   placeholder in `render.yaml`.
+5. Trigger the first deploy manually (auto-deploy is off in the MVP).
+6. Confirm: `curl https://<service>.onrender.com/health` →
+   `{"status":"ok",...}`. Render's **Logs** tab streams the Pino JSON.
+7. Paste the public URL into the viewer and camera builds as
+   `EXPO_PUBLIC_SIGNALING_URL` / `VITE_SIGNALING_URL`.
+
+> **Free tier caveat**: services sleep after 15 min of inactivity. The
+> first request after sleep takes 30–60 s to boot. Acceptable for MVP
+> demos; for real production move to a paid plan or a host without
+> idle suspension (Fly.io, Railway).
+
+**Manual setup** (without the Blueprint) is still documented for
+reference: New + → Web Service → Docker runtime → Dockerfile path
+`apps/server/Dockerfile` → context `.` → branch `main` → health check
+`/health`. Set every env var from the table above.
 
 ### Local Docker
 
