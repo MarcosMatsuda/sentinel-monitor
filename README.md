@@ -4,8 +4,6 @@
 
 Pair any RTSP camera (Tapo, Reolink, Hikvision) via a small Node.js gateway and watch from anywhere on iOS, Android, or the web. One Expo Universal codebase. Your video never touches a vendor's cloud.
 
-> Status: MVP working end-to-end with a real Tapo C200 over LAN. Full delivery plan in [`roadmap.html`](roadmap.html), architecture deep dive in [`architecture.html`](architecture.html).
-
 ---
 
 ## Why this exists
@@ -119,7 +117,7 @@ For "see my cameras from anywhere":
 - `pnpm --filter @sentinel-monitor/viewer exec expo export --platform web` and upload the bundle to Vercel
 - Spin up a coturn instance on a $5/month Hetzner VPS (or use Twilio Network Traversal) and set `TURN_URL` / `TURN_USER` / `TURN_PASS` on the server
 
-The full production checklist lives in [`roadmap.html`](roadmap.html) under **Phase 1.5 — Personal production**.
+Run `pnpm build` from the relevant workspace and follow your host's standard deploy flow.
 
 ---
 
@@ -137,7 +135,6 @@ sentinel-monitor/
 │   ├── webrtc-config/ # ICE servers, media constraints, bitrate presets
 │   └── design-tokens/ # Colors, spacing, typography
 ├── architecture.html  # SDD-style technical document
-├── roadmap.html       # Phased delivery plan with cards by category
 ├── render.yaml        # Render Blueprint for one-click signaling deploy
 ├── docker-compose.yml # Local server + optional gateway profile
 ├── start              # iTerm2 multiplexer for the 4 dev services
@@ -178,11 +175,11 @@ The repo ships a [`render.yaml`](render.yaml) Blueprint at the root. Render auto
 2. In Render: **New +** -> **Blueprint** -> connect this repo.
 3. Render reads `render.yaml`, shows the service plan, click **Apply**.
 4. After provisioning, open the service -> **Environment** and fill in the `sync: false` secrets if you need TURN: `TURN_URL`, `TURN_USER`, `TURN_PASS`. Update `CORS_ORIGIN` if your viewer URL differs from the placeholder in `render.yaml`.
-5. Trigger the first deploy manually (auto-deploy is off in the MVP).
+5. Trigger the first deploy manually (auto-deploy is off by default).
 6. Confirm: `curl https://<service>.onrender.com/health` -> `{"status":"ok",...}`. Render's **Logs** tab streams the Pino JSON.
 7. Paste the public URL into the viewer and camera builds as `EXPO_PUBLIC_SIGNALING_URL` / `VITE_SIGNALING_URL`.
 
-> **Free tier caveat**: services sleep after 15 min of inactivity. The first request after sleep takes 30–60 s to boot. Acceptable for MVP demos; for real production move to a paid plan or a host without idle suspension (Fly.io, Railway).
+> **Free tier caveat**: services sleep after 15 min of inactivity. The first request after sleep takes 30–60 s to boot. Move to a paid plan or a host without idle suspension (Fly.io, Railway) for always-on workloads.
 
 ### Local Docker
 
@@ -274,20 +271,6 @@ docker compose logs server | head -n 5
 $EDITOR gateway/gateway.yaml      # set pairedDashboards: [] for the camera
 # then restart the gateway
 ```
-
----
-
-## Roadmap (the short version)
-
-| Phase | Theme | Status |
-|---|---|---|
-| 1 | MVP core (signaling, gateway, viewer, browser publisher) | Done |
-| 1.5 | Personal production (TURN, Vercel, EAS, RPi gateway, observability) | In progress |
-| 1.6 | Multi-tenant pilot (auth, central DB, isolation, self-service onboarding) | Planned |
-| 2 | Cross-camera AI tracking (YOLO edge + Gemini Vision cloud, watchlists, LPR) | Planned |
-| 3 | Recording, scale, SaaS (continuous + triggered recording, timeline UI, billing, motion zones, SFU) | Planned |
-
-Full breakdown with cards filterable by category (Core / AI / UX / Infra / Recording) is in [`roadmap.html`](roadmap.html).
 
 ---
 
