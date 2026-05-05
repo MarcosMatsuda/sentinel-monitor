@@ -1,67 +1,150 @@
 # Sentinel Monitor
 
-Multi-camera B2B dashboard for security operations. Open a web URL on a camera device to publish a stream; pair it with a dashboard via a 6-character code; the binding is permanent. Dashboard supports up to 9 cameras in a 1×1 / 2×2 / 3×3 grid, runs on iOS, Android and the web from a single Expo Universal codebase.
+**Self-hosted multi-camera surveillance dashboard. WebRTC peer-to-peer, vendor-agnostic, runs on a Raspberry Pi.**
 
-> Status: scaffolding (pre-MVP). Plan and architecture are documented at `architecture.html`. Roadmap at `roadmap.html`.
+Pair any RTSP camera (Tapo, Reolink, Hikvision) via a small Node.js gateway and watch from anywhere on iOS, Android, or the web. One Expo Universal codebase. Your video never touches a vendor's cloud.
 
-## How it works
+> Status: MVP working end-to-end with a real Tapo C200 over LAN. Full delivery plan in [`roadmap.html`](roadmap.html), architecture deep dive in [`architecture.html`](architecture.html).
+
+---
+
+## Why this exists
+
+Every consumer IP-camera vendor sells you hardware once and then funnels you into their cloud forever. Your video, your motion alerts, your license plates — all sitting on someone else's servers. Tapo cloud, Reolink cloud, Wyze cloud. Different brand, same lock-in.
+
+Sentinel flips that:
+
+- **Your video never leaves your infrastructure.** WebRTC negotiates a peer-to-peer link straight from the camera's local network to your viewer. The signaling server only routes handshake metadata, never frames.
+- **Mix any cameras you already own.** A Tapo in the kitchen, a Reolink in the garage, a Hikvision out front — all show up in the same 1×1 / 2×2 / 3×3 grid.
+- **One codebase, every screen.** Expo Universal renders the same dashboard on iOS, Android, and the web. Pair a camera once on your laptop and it's there on your phone.
+- **Built to be self-hosted.** A Raspberry Pi 4 in the living room is enough for 4–6 cameras. The signaling server fits comfortably on Render's free tier.
+
+---
+
+## Architecture
 
 ```
-  Camera device (browser)              Server (signaling + presence)        Viewer (Expo Universal)
-  ┌────────────────────┐               ┌────────────────────────┐           ┌─────────────────────┐
-  │ getUserMedia       │               │ presence map           │           │ AsyncStorage:       │
-  │ UUID stable        │◄─── WebRTC P2P (after handshake) ─────►│           │   bindings[]       │
-  │ pairing code       │               │ pairing codes (TTL 5m) │           │   dashboardId      │
-  │ persists pairings  │   signaling   │ signal routing by UUID │ signaling │ Grid 1x1/2x2/3x3   │
-  └─────────┬──────────┘──────────────►│                        │◄──────────┤ Tap → fullscreen   │
-            │                          └────────────────────────┘           │ Rename / Remove    │
-            └────── direct video + audio ─────────────────────────────────►│
+[Tapo / Reolink / any RTSP cam]   <-- LAN only, never the internet
+              |
+              | RTSP
+              v
+     [go2rtc on Raspberry Pi]   bridges RTSP -> WebRTC
+              |
+              | WHEP
+              v
+     [sentinel-gateway]   per-camera identity, pairing, signaling client
+              |
+              | Socket.IO
+              v
+     [signaling server]   stateless, in-memory presence map (Render)
+              ^
+              | Socket.IO
+              |
+     [viewer]   pair once, reconnect forever (Expo Universal)
+              ^
+              |
+              +--- WebRTC P2P direct ---> go2rtc / camera
 ```
 
-**Pairing (one-time)**:
-1. Camera device opens the camera URL → generates persistent UUID → shows 6-char code
-2. Operator at HQ enters the code in the dashboard → server resolves to camera UUID → both sides save the binding
-3. From now on, dashboard reconnects to the camera automatically on every restart
+The signaling server is **stateless** and only routes signaling envelopes by peer UUID. It never sees video. The gateway is an ARM-friendly Node service that proxies WHEP offers into the local go2rtc instance, keeping the heavy work on the Pi.
+
+### Pairing flow (one time per camera)
+
+1. Gateway boots, connects to the signaling server, registers each camera with a stable UUID
+2. Operator opens the viewer, taps **Add camera**, enters a 6-character pairing code shown in the gateway logs
+3. Server matches the code to the camera UUID, both sides persist the binding
+4. Every subsequent reconnect skips pairing — bindings are durable on both ends
+
+### Why peer-to-peer matters
+
+A 1080p H264 stream at 15fps is roughly 1 GB per camera per day. With four cameras and three viewers, a relay-based architecture would shovel ~12 GB/day through the cloud. WebRTC P2P keeps that traffic on the LAN and only "borrows" a TURN relay (~$5/month) for the cases where direct ICE fails (CGNAT, restrictive firewalls, mobile carriers).
+
+---
 
 ## Stack
 
 | Layer | Technology |
 |---|---|
-| Server | Node.js, Express, Socket.IO |
-| Camera publisher | Vite, vanilla TypeScript, native browser WebRTC |
-| Viewer | Expo (iOS / Android / Web via react-native-web), Expo Router, Zustand, react-native-webrtc on native, native browser WebRTC on web |
-| Shared | TypeScript strict, Turborepo, pnpm workspaces, design tokens |
+| Signaling server | Node.js · Express · Socket.IO · Pino · Zod |
+| RTSP -> WebRTC bridge | [go2rtc](https://github.com/AlexxIT/go2rtc) (binary on the Pi) |
+| LAN gateway | Node.js · Socket.IO client · WHEP proxy |
+| Viewer | Expo SDK 52 · Expo Router · Zustand · `react-native-webrtc` (native) / browser WebRTC (web) |
+| Shared | TypeScript strict · Turborepo · pnpm workspaces · Clean Architecture per app |
+
+Every app follows Clean Architecture (`domain -> data / infrastructure -> presentation`). The domain layer has zero framework imports — pure types and use-cases that survive any framework rewrite.
+
+---
+
+## Quick start
+
+Three paths depending on what you have on hand.
+
+### 1. Browser-only smoke test (just a laptop)
+
+```bash
+git clone <repo-url>
+cd sentinel-monitor
+pnpm install
+./start
+```
+
+Open the Camera URL in one tab (uses your webcam), the Viewer URL in another, type the 6-character code. Done. No physical camera, no Raspberry Pi, no go2rtc — this proves the WebRTC core in under a minute.
+
+### 2. Real cameras via go2rtc + gateway (Mac / Linux dev box)
+
+You'll need:
+
+- [go2rtc](https://github.com/AlexxIT/go2rtc/releases/latest) on your PATH (`/usr/local/bin/go2rtc` is fine)
+- A `gateway/gateway.yaml` describing your cameras
+- An RTSP-capable camera with credentials configured (Tapo: enable "Camera Account" in the app)
+
+```bash
+mkdir -p gateway
+cp apps/gateway/gateway.yaml.example gateway/gateway.yaml
+$EDITOR gateway/gateway.yaml          # add your RTSP URL(s)
+
+./start
+```
+
+`./start` opens four iTerm2 tabs (Server, go2rtc, Gateway, Viewer), kills any stale processes on the relevant ports, and pre-flights `go2rtc` + the YAML config. Watch the gateway logs for `pairing.code_issued`, paste the 6-char code into the viewer at `http://localhost:8081`, and you've got live video.
+
+> **Heads up for Chrome users on macOS/Linux**: Chrome hides local IPs behind mDNS by default, and go2rtc can't resolve `.local` hostnames. Either disable the flag at `chrome://flags/#enable-webrtc-hide-local-ips-with-mdns` for local dev, or deploy a TURN server so ICE can complete via relay.
+
+### 3. Production: Pi gateway + Render + Vercel + TURN
+
+For "see my cameras from anywhere":
+
+- Flash a Raspberry Pi 4 with the gateway Docker image (multi-arch build, ARM-native)
+- Deploy the signaling server to Render with the included Blueprint (`render.yaml`) — one click after connecting the repo
+- `pnpm --filter @sentinel-monitor/viewer exec expo export --platform web` and upload the bundle to Vercel
+- Spin up a coturn instance on a $5/month Hetzner VPS (or use Twilio Network Traversal) and set `TURN_URL` / `TURN_USER` / `TURN_PASS` on the server
+
+The full production checklist lives in [`roadmap.html`](roadmap.html) under **Phase 1.5 — Personal production**.
+
+---
 
 ## Project layout
 
 ```
 sentinel-monitor/
 ├── apps/
-│   ├── server/        # Signaling + presence
+│   ├── server/        # Signaling + presence (Express + Socket.IO)
 │   ├── camera/        # Browser camera publisher (Vite + vanilla TS)
+│   ├── gateway/       # LAN bridge for IP cams (Node, runs on Pi)
 │   └── viewer/        # Expo Universal dashboard (iOS / Android / Web)
 ├── packages/
-│   ├── shared-types/  # Domain types, Socket.IO contract, DataChannel messages
+│   ├── shared-types/  # Domain types, Socket.IO contract, message DTOs
 │   ├── webrtc-config/ # ICE servers, media constraints, bitrate presets
 │   └── design-tokens/ # Colors, spacing, typography
-├── architecture.html  # Full SDD-style technical document
-├── roadmap.html       # Phased delivery plan (MVP → Phase 2 AI → Phase 3 scale)
-├── start              # iTerm2 tabs for server + camera + viewer
+├── architecture.html  # SDD-style technical document
+├── roadmap.html       # Phased delivery plan with cards by category
+├── render.yaml        # Render Blueprint for one-click signaling deploy
+├── docker-compose.yml # Local server + optional gateway profile
+├── start              # iTerm2 multiplexer for the 4 dev services
 └── turbo.json
 ```
 
-Each app follows Clean Architecture: `domain → data/infrastructure → presentation`. The `domain` layer has zero framework dependencies.
-
-## Quick start
-
-> **Status**: scaffolding only. The commands below will become functional as PRs land. Track progress in the GitHub project board.
-
-```bash
-git clone <repo-url>
-cd sentinel-monitor
-pnpm install
-./start              # opens iTerm2 tabs for all 3 services (once implemented)
-```
+---
 
 ## Server runtime configuration
 
@@ -77,7 +160,9 @@ The signaling server validates its environment at boot via a Zod schema. Missing
 | `TURN_USER` | optional | — | TURN username. |
 | `TURN_PASS` | optional | — | TURN credential. |
 
-A copy-ready `.env.example` lives next to the server (`apps/server/.env.example` — add one if you customize defaults).
+A copy-ready `.env.example` lives at the repo root.
+
+---
 
 ## Deploy
 
@@ -85,35 +170,19 @@ The viewer and camera apps are static bundles (Expo Web export and Vite build) a
 
 ### Render free tier (signaling server)
 
-The repo ships a [`render.yaml`](render.yaml) Blueprint at the root —
-Render auto-detects it and provisions the service with the right
-Dockerfile, health check and non-secret env vars in one click.
+The repo ships a [`render.yaml`](render.yaml) Blueprint at the root. Render auto-detects it and provisions the service with the right Dockerfile, health check, and non-secret env vars in one click.
 
 **One-shot import**:
 
-1. Make sure `main` exists with the latest release commit (the Blueprint
-   pins `branch: main` and `autoDeploy: false`).
-2. In Render: **New +** → **Blueprint** → connect this repo.
+1. Make sure `main` exists with the latest release commit (the Blueprint pins `branch: main` and `autoDeploy: false`).
+2. In Render: **New +** -> **Blueprint** -> connect this repo.
 3. Render reads `render.yaml`, shows the service plan, click **Apply**.
-4. After provisioning, open the service → **Environment** and fill in the
-   `sync: false` secrets if you need TURN: `TURN_URL`, `TURN_USER`,
-   `TURN_PASS`. Update `CORS_ORIGIN` if your viewer URL differs from the
-   placeholder in `render.yaml`.
+4. After provisioning, open the service -> **Environment** and fill in the `sync: false` secrets if you need TURN: `TURN_URL`, `TURN_USER`, `TURN_PASS`. Update `CORS_ORIGIN` if your viewer URL differs from the placeholder in `render.yaml`.
 5. Trigger the first deploy manually (auto-deploy is off in the MVP).
-6. Confirm: `curl https://<service>.onrender.com/health` →
-   `{"status":"ok",...}`. Render's **Logs** tab streams the Pino JSON.
-7. Paste the public URL into the viewer and camera builds as
-   `EXPO_PUBLIC_SIGNALING_URL` / `VITE_SIGNALING_URL`.
+6. Confirm: `curl https://<service>.onrender.com/health` -> `{"status":"ok",...}`. Render's **Logs** tab streams the Pino JSON.
+7. Paste the public URL into the viewer and camera builds as `EXPO_PUBLIC_SIGNALING_URL` / `VITE_SIGNALING_URL`.
 
-> **Free tier caveat**: services sleep after 15 min of inactivity. The
-> first request after sleep takes 30–60 s to boot. Acceptable for MVP
-> demos; for real production move to a paid plan or a host without
-> idle suspension (Fly.io, Railway).
-
-**Manual setup** (without the Blueprint) is still documented for
-reference: New + → Web Service → Docker runtime → Dockerfile path
-`apps/server/Dockerfile` → context `.` → branch `main` → health check
-`/health`. Set every env var from the table above.
+> **Free tier caveat**: services sleep after 15 min of inactivity. The first request after sleep takes 30–60 s to boot. Acceptable for MVP demos; for real production move to a paid plan or a host without idle suspension (Fly.io, Railway).
 
 ### Local Docker
 
@@ -131,15 +200,17 @@ pnpm --filter @sentinel-monitor/camera build
 
 # Viewer (Expo web export)
 pnpm --filter @sentinel-monitor/viewer exec expo export --platform web
-# upload apps/viewer/dist (or the directory configured in app.json) to your static host
+# upload apps/viewer/dist (or the directory configured in app.json)
 ```
+
+---
 
 ## Monitoring
 
-The server emits structured JSON logs to stdout via [pino](https://getpino.io/). Each log line carries:
+The server emits structured JSON logs to stdout via [Pino](https://getpino.io/). Each line carries:
 
 - `time` — ISO timestamp
-- `level` — pino numeric level (`30` info, `40` warn, `50` error)
+- `level` — Pino numeric level (`30` info, `40` warn, `50` error)
 - `service` — always `sentinel-server`
 - `event` — domain-event tag (e.g. `socket.connected`, `pairing.code_issued`, `pairing.redeem_failed`, `presence.registered`, `presence.removed`, `signal.dropped`, `boot.listening`, `boot.shutdown`)
 - `correlationId` + `socketId` — bound to a child logger per Socket.IO connection so you can trace a single client end-to-end
@@ -152,14 +223,22 @@ What to watch in production:
 | `signal.dropped` events | A peer is going offline mid-handshake. Confirm presence churn. |
 | `presence.registered` count vs `presence.removed` count | Should balance over time. A growing gap means orphan presence — investigate. |
 | `boot.shutdown` outside a planned deploy | Process was killed (OOM, host restart). Check the platform's process logs. |
-| `/health` → non-200 | Liveness check failed. Render will restart automatically. |
+| `/health` -> non-200 | Liveness check failed. Render will restart automatically. |
 
-On Render: **Logs** tab streams stdout in real time. Use the **Search** box with the JSON `event` value (e.g. `pairing.redeem_failed`) to filter.
+On Render: the **Logs** tab streams stdout in real time. Use the **Search** box with the JSON `event` value (e.g. `pairing.redeem_failed`) to filter.
+
+---
 
 ## Troubleshooting
 
 **Server fails to boot with `Invalid server environment: ...`**
 The Zod env validator caught a misconfiguration. The error names the offending variable. Fix it in your platform's env config and redeploy. Validation runs before the listener binds, so the process exits with code `1`.
+
+**Tile shows `Aguardando vídeo…` but Chrome devtools say the connection is `connected`**
+Chrome hides local IPs behind mDNS by default, and go2rtc cannot resolve `.local` hostnames in its ICE agent. Either disable the flag at `chrome://flags/#enable-webrtc-hide-local-ips-with-mdns` and relaunch Chrome, or deploy a TURN server so ICE candidate pairs can succeed via relay. Adding `webrtc.candidates: [127.0.0.1:8555, <LAN-IP>:8555]` to your `gateway/go2rtc.yaml` also helps when running viewer + go2rtc on the same machine.
+
+**Video element receives the stream but stays black**
+Chrome's autoplay policy blocks `play()` on streams that contain audio unless the element is muted **in JavaScript** before `srcObject` is set. The viewer does this in `video-surface.web.tsx` — if you fork it, keep that ordering or add a "click to start" overlay.
 
 **Camera shows "connected" but dashboard never receives video**
 Check three places, in order:
@@ -190,38 +269,36 @@ docker compose build server && docker compose up -d server
 
 # Inspect parsed env on boot — the first JSON line includes the safe view
 docker compose logs server | head -n 5
+
+# Generate a fresh pairing code (clears persisted dashboard binding)
+$EDITOR gateway/gateway.yaml      # set pairedDashboards: [] for the camera
+# then restart the gateway
 ```
 
-## Run a real home setup with Tapo cams
+---
 
-For the production data flow (IP cams in your LAN, viewer accessible from
-anywhere on the internet), use `apps/gateway` instead of the browser-based
-`apps/camera`.
+## Roadmap (the short version)
 
-```
-[Tapo C200]──RTSP──►[go2rtc]──►[gateway]──signaling──►[server]──►[viewer anywhere]
-        (LAN — Mac/Pi running docker compose)             (Render)    (Vercel)
-```
+| Phase | Theme | Status |
+|---|---|---|
+| 1 | MVP core (signaling, gateway, viewer, browser publisher) | Done |
+| 1.5 | Personal production (TURN, Vercel, EAS, RPi gateway, observability) | In progress |
+| 1.6 | Multi-tenant pilot (auth, central DB, isolation, self-service onboarding) | Planned |
+| 2 | Cross-camera AI tracking (YOLO edge + Gemini Vision cloud, watchlists, LPR) | Planned |
+| 3 | Recording, scale, SaaS (continuous + triggered recording, timeline UI, billing, motion zones, SFU) | Planned |
 
-1. Confirm your Tapo speaks RTSP standalone — see
-   [`apps/gateway/README.md`](apps/gateway/README.md) "Quickstart" step 1.
-2. `cp apps/gateway/gateway.yaml.example gateway/gateway.yaml` and add
-   each camera's RTSP URL.
-3. `docker compose --profile gateway up` — boots both `go2rtc` and the
-   gateway service.
-4. Watch logs for a 6-character pairing code per camera, enter it in the
-   viewer (web or native) once. The binding persists.
-5. `curl http://127.0.0.1:9090/pairing` shows live pairing status.
+Full breakdown with cards filterable by category (Core / AI / UX / Infra / Recording) is in [`roadmap.html`](roadmap.html).
 
-Full docs (config, troubleshooting, architecture):
-[`apps/gateway/README.md`](apps/gateway/README.md).
+---
 
 ## Branching policy
 
 - `main` — locked. Receives only the v1.0.0 release merge.
 - `develop` — default integration branch. All feature PRs target develop.
-- `feat/issue-NN-*`, `fix/issue-NN-*`, `chore/issue-NN-*`, `test/issue-NN-*` — short-lived, one per GitHub issue.
+- `feat/*`, `fix/*`, `chore/*`, `test/*` — short-lived, one per task.
+
+---
 
 ## License
 
-MIT
+MIT — see [`LICENSE`](LICENSE).
